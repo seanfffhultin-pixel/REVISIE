@@ -1,0 +1,24 @@
+.brand-logo {
+  display: block;
+  padding: 0;
+  margin: 0 0 30px 10px;
+}
+
+.brand-logo img {
+  display: block;
+  width: 148px;
+  height: auto;
+}
+
+.auth-logo img {
+  display: block;
+  width: 148px;
+  height: auto;
+}
+
+@media (max-width: 650px) {
+  .brand-logo img {
+    width: 140px;
+    height: auto;
+  }
+}
