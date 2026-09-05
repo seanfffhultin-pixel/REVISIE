@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resources — REVISIÉ</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar"></aside>
+    <main class="main-content">
+      <header class="topbar"><div class="breadcrumb"><strong>Resources</strong></div><div class="avatar">SH</div></header>
+      <div class="page-wrap">
+        <section class="page-intro">
+          <p class="eyebrow">STUDY FILES</p>
+          <h1>Resources.</h1>
+          <p class="hero-copy">Keep your revision PDFs in one place, ready to open when you need them.</p>
+        </section>
+        <form id="resourceUploadForm" class="notes-form">
+          <label class="upload-label" for="resourceFile">Add a PDF</label>
+          <input id="resourceFile" type="file" accept="application/pdf,.pdf" required>
+          <button class="primary-button" type="submit">Save PDF</button>
+        </form>
+        <section class="notes-section">
+          <div class="section-heading"><div><p class="eyebrow">SAVED FILES</p><h2>Your PDFs</h2></div></div>
+          <div class="resource-list"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="site.js"></script>
+</body>
+</html>

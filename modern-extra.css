@@ -1,0 +1,1 @@
+html,body{overflow-x:hidden}.hero-row{min-width:0}.hero-row>div:first-child{min-width:0}.hero-mark{flex-shrink:0}@media(max-width:650px){.hero-mark{width:120px;margin-right:-8px}.hero-row{gap:4px}}
