@@ -67,3 +67,17 @@ $$;
 revoke all on public.shared_items from anon, authenticated;
 grant insert, delete on public.shared_items to authenticated;
 grant execute on function public.get_shared_item(uuid) to anon, authenticated;
+
+-- Private PDFs are stored outside the browser so they follow the signed-in
+-- account to every device. Each user can only access files in their own folder.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('workspace-files', 'workspace-files', false, 26214400, array['application/pdf'])
+on conflict (id) do update set public = false, file_size_limit = 26214400,
+  allowed_mime_types = array['application/pdf'];
+
+drop policy if exists "Users manage their own workspace files" on storage.objects;
+create policy "Users manage their own workspace files"
+  on storage.objects for all
+  to authenticated
+  using (bucket_id = 'workspace-files' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'workspace-files' and (storage.foldername(name))[1] = auth.uid()::text);
