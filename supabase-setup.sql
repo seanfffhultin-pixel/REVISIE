@@ -71,9 +71,9 @@ grant execute on function public.get_shared_item(uuid) to anon, authenticated;
 -- Private PDFs are stored outside the browser so they follow the signed-in
 -- account to every device. Each user can only access files in their own folder.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('workspace-files', 'workspace-files', false, 26214400, array['application/pdf'])
+values ('workspace-files', 'workspace-files', false, 26214400, array['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
 on conflict (id) do update set public = false, file_size_limit = 26214400,
-  allowed_mime_types = array['application/pdf'];
+  allowed_mime_types = array['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
 drop policy if exists "Users manage their own workspace files" on storage.objects;
 create policy "Users manage their own workspace files"
