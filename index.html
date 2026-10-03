@@ -6,31 +6,16 @@
   <title>REVISIÉ — Your revision space</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=optional" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="brand.css" />
-</head>
+<link rel="stylesheet" href="modern.css"><link rel="stylesheet" href="modern-extra.css"></head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar">
-      <a class="brand brand-logo" href="index.html" aria-label="REVISIÉ home"><img src="assets/revisie-logo.png?v=2" alt="REVISIÉ" width="148" height="63"></a>
-      <div class="workspace-switcher"><div class="avatar small">SH</div><div><strong>Sean's workspace</strong><small>Personal plan</small></div><i data-lucide="chevrons-up-down"></i></div>
-      <nav class="main-nav" aria-label="Main navigation">
-        <p class="nav-label">Workspace</p>
-        <a class="nav-item active" href="index.html" data-view="dashboard"><i data-lucide="layout-dashboard"></i>Overview</a>
-        <a class="nav-item" href="subjects.html" data-view="subjects"><i data-lucide="library"></i>Subjects<span class="nav-count">6</span></a>
-        <a class="nav-item" href="flashcards.html" data-view="flashcards"><i data-lucide="layers-3"></i>Flashcards<span class="nav-count alert">18</span></a>
-        <a class="nav-item" href="notes.html" data-view="notes"><i data-lucide="notebook-pen"></i>Notes</a>
-        <a class="nav-item" href="assistant.html" data-view="ai"><i data-lucide="sparkles"></i>Study assistant</a>
-        <p class="nav-label second">Tools</p>
-        <a class="nav-item" href="planner.html" data-view="planner"><i data-lucide="calendar-days"></i>Revision planner</a>
-        <a class="nav-item" href="progress.html" data-view="progress"><i data-lucide="chart-no-axes-combined"></i>Progress</a>
-      </nav>
-      <div class="sidebar-bottom"><div class="account-panel"><div class="account-panel-icon"><i data-lucide="user-round"></i></div><div><strong>Personal account</strong><small>Your workspace</small></div></div><a class="nav-item muted" href="settings.html"><i data-lucide="settings-2"></i>Settings</a><a class="nav-item muted" href="help.html"><i data-lucide="circle-help"></i>Help centre</a></div>
-    </aside>
+    <aside class="sidebar" data-ready="true"><a class="brand brand-logo" href="index.html" aria-label="REVISIÉ home"><img src="assets/revisie-logo.png?v=2" alt="REVISIÉ" width="148" height="63"></a><div class="workspace-switcher"><div class="avatar small">SH</div><div><strong>Sean's workspace</strong><small>GCSE Higher Tier</small></div><i data-lucide="chevrons-up-down"></i></div><nav class="main-nav" aria-label="Main navigation"><p class="nav-label">Workspace</p><a class="nav-item active" aria-current="page" data-page="index.html" href="index.html"><i data-lucide="layout-dashboard"></i>Overview</a><a class="nav-item" data-page="subjects.html" href="subjects.html"><i data-lucide="library"></i>Subjects<span class="nav-count">10</span></a><a class="nav-item" data-page="flashcards.html" href="flashcards.html"><i data-lucide="layers-3"></i>Flashcards<span class="nav-count alert">18</span></a><a class="nav-item" data-page="notes.html" href="notes.html"><i data-lucide="notebook-pen"></i>Notes</a><a class="nav-item" data-page="resources.html" href="resources.html"><i data-lucide="folder-open"></i>Resources</a><p class="nav-label second">Tools</p><a class="nav-item" data-page="planner.html" href="planner.html"><i data-lucide="calendar-days"></i>Revision planner</a><a class="nav-item" data-page="progress.html" href="progress.html"><i data-lucide="chart-no-axes-combined"></i>Progress</a></nav></aside>
 
     <main class="main-content" id="dashboard">
-      <header class="topbar overview-topbar"><span>Overview</span><div class="avatar">SH</div></header>
+      <header class="topbar overview-topbar"><span>Overview</span><div class="top-actions"><button class="icon-button mobile-menu-button" id="mobileMenu" type="button" aria-label="Open navigation menu" aria-expanded="false"><i data-lucide="menu"></i></button><button class="icon-button" id="siteSearch" type="button" title="Search" aria-label="Search subjects and topics"><i data-lucide="search"></i></button><a class="icon-button topbar-link" href="help.html" title="Help centre" aria-label="Help centre"><i data-lucide="circle-help"></i></a><a class="icon-button topbar-link" href="settings.html" title="Settings" aria-label="Settings"><i data-lucide="settings-2"></i></a><div class="avatar">SH</div></div></header>
       <div class="page-wrap overview-clean">
         <section class="overview-intro"><p class="eyebrow">YOUR REVISION SPACE</p><h1 id="overviewGreeting">Good morning.</h1><p>One thing at a time.</p></section>
         <section class="resume-section" aria-labelledby="resume-heading">
@@ -45,6 +30,6 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="https://unpkg.com/lucide@latest"></script><script src="site.js"></script>
+  <script defer src="assets/lucide.min.js"></script><script defer src="site.js"></script>
 </body>
 </html>
