@@ -66,22 +66,29 @@ const root = path.resolve(__dirname, '..');
     const sidebarBefore = await page.locator('.sidebar').boundingBox();
     await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'instant' }));
     const sidebarAfter = await page.locator('.sidebar').boundingBox();
-    assert.equal(sidebarBefore.y, sidebarAfter.y, 'Sidebar must stay fixed while scrolling');
+    assert.ok(Math.abs(sidebarBefore.y - sidebarAfter.y) < 1, 'Sidebar must stay fixed while scrolling (allow subpixel rounding)');
 
     await goto('progress');
     assert.equal(await page.locator('.stat-icon svg').count(), 3);
-    await page.locator('#allocationMinutes').fill('50');
-    await page.locator('#allocationSubject').selectOption('biology');
-    await page.locator('#allocationCards').fill('12');
-    assert.equal(await page.locator('#allocationForm').evaluate(form => form.checkValidity()), true);
-    await page.locator('#allocationForm button').click();
-    await page.waitForFunction(() => document.querySelector('.stat-card strong')?.textContent === '12', null, { timeout: 3000 });
-    assert.deepEqual(await page.locator('.stat-card strong').allTextContents(), ['12', '50 mins', '1']);
-    assert.match(await page.locator('.allocation-list').innerText(), /Biology\s+12 cards/);
-    await page.locator('#allocationSubject').selectOption('german');
-    assert.equal(await page.locator('#allocationCards').inputValue(), '0');
+    assert.equal(await page.locator('.allocation-panel, #allocationForm').count(), 0);
+    assert.deepEqual(await page.locator('.stat-card strong').allTextContents(), ['0', '0', '0 mins']);
+    assert.match(await page.locator('.revision-summary').innerText(), /No revision recorded yet/);
+    await page.evaluate(() => {
+      const unit = getUnits('biology')[0].name;
+      saveWorkspaceItem('revisie-topic-progress', JSON.stringify({[`biology::${unit}`]: 2}));
+      saveWorkspaceItem('revisie-planner-items', JSON.stringify([
+        { id: 1, subject: 'biology', title: 'Biology revision', date: studyDate(), minutes: 30, done: true },
+        { id: 2, subject: 'history', title: 'Planned only', date: studyDate(), minutes: 50, done: false },
+        { id: 3, subject: 'biology', title: 'Future plan', date: shiftStudyDate(studyDate(), 1), minutes: 25, done: true }
+      ]));
+      saveWorkspaceItem('revisie-due', JSON.stringify({biology: 99}));
+      setupProgressRoute();
+    });
+    assert.deepEqual(await page.locator('.stat-card strong').allTextContents(), ['2', '1', '30 mins']);
+    assert.match(await page.locator('.revision-subject').innerText(), /Biology[\s\S]*2 cards marked known[\s\S]*30 min[\s\S]*1 session complete/);
     await goto('progress');
-    assert.deepEqual(await page.locator('.stat-card strong').allTextContents(), ['12', '50 mins', '1']);
+    assert.deepEqual(await page.locator('.stat-card strong').allTextContents(), ['2', '1', '30 mins']);
+    await page.evaluate(() => { localStorage.removeItem('revisie-topic-progress'); localStorage.removeItem('revisie-planner-items'); localStorage.removeItem('revisie-due'); });
 
     await goto('subjects');
     await page.locator('[data-filter="science"]').click();
@@ -103,7 +110,17 @@ const root = path.resolve(__dirname, '..');
     await page.locator('[data-action="unit-review"]').first().click();
     await page.locator('#flashcard').click();
     assert.equal(await page.locator('#flashcard').getAttribute('class'), 'flashcard answer');
+    await page.locator('#known').click();
+    assert.equal(await page.evaluate(() => streakState().current), 1);
+    await page.locator('#flashcard').click();
+    await page.locator('#again').click();
+    assert.equal(await page.evaluate(() => streakState().total), 1, 'Repeated reviews earn one day');
     await page.keyboard.press('Escape');
+    await goto('index');
+    assert.match(await page.locator('.streak-panel').innerText(), /Today is complete/);
+    assert.equal(await page.locator('.streak-panel .week-day.done').count(), 1);
+    await goto('progress');
+    assert.match(await page.locator('.streak-panel').innerText(), /Best streak\s+1 day/);
 
     await goto('planner');
     await page.locator('#timetableAdd').click();
@@ -114,6 +131,7 @@ const root = path.resolve(__dirname, '..');
     await page.locator('[data-complete-session]').focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('.session-card.done').count(), 1);
+    assert.equal(await page.evaluate(() => streakState().total), 1, 'Planner completion shares the same daily credit');
     assert.equal(await page.locator('.modal').count(), 0, 'Completing a session must not open the slot editor');
     await page.locator('.session-card').focus();
     await page.keyboard.press('Enter');
@@ -139,7 +157,25 @@ const root = path.resolve(__dirname, '..');
     await page.locator('.top-actions a[href="settings.html"]').click();
     assert.match(page.url(), /settings\.html$/);
     assert.equal(await page.locator('.top-actions a[href="settings.html"]').getAttribute('aria-current'), 'page');
-    console.log(`Passed ${layouts} responsive page checks, topbar utility navigation, fixed-sidebar checks, progress save/reload, icons, filters, dialog focus, review cards, planner keyboard controls, and mobile navigation.`);
+    await goto('index');
+    await page.evaluate(() => {
+      localStorage.setItem('revisie-streak', JSON.stringify({ current: 7, lastDate: shiftStudyDate(studyDate(), -2) }));
+      refreshStreakSurfaces();
+    });
+    assert.equal(await page.locator('.streak-big').textContent(), '0');
+    assert.match(await page.locator('.streak-records').innerText(), /Best streak\s+7 days/);
+    await page.evaluate(() => openStreak());
+    assert.match(await page.locator('.modal').innerText(), /last streak ended/);
+    await page.keyboard.press('Escape');
+    const secondTab = await context.newPage();
+    await secondTab.goto('https://revisie.test/index.html');
+    await secondTab.evaluate(() => markStudyComplete());
+    await page.waitForFunction(() => document.querySelector('.streak-big').textContent === '1');
+    await secondTab.close();
+    await page.reload();
+    assert.equal(await page.locator('.streak-big').textContent(), '1');
+    assert.deepEqual(errors, [], 'Streak activity must not cause JavaScript errors');
+    console.log(`Passed ${layouts} responsive page checks, topbar utility navigation, fixed-sidebar checks, completed revision stats and reload, icons, filters, dialog focus, review cards, planner keyboard controls, mobile navigation, and streak review/planner credit, history, expiry, persistence, and cross-tab updates.`);
   } finally {
     await browser.close();
   }

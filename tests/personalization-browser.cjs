@@ -1,0 +1,186 @@
+// Run with Playwright available in NODE_PATH: node tests/personalization-browser.cjs
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { chromium } = require('playwright');
+const root = path.resolve(__dirname, '..');
+(async () => {
+  const browser = await chromium.launch();
+  try {
+    const context = await browser.newContext({ reducedMotion: 'reduce', viewport: { width: 1440, height: 1000 } });
+    await context.route('**/*', route => {
+      const url = new URL(route.request().url());
+      if (url.hostname !== 'revisie.test') return route.abort();
+      const file = path.resolve(root, '.' + decodeURIComponent(url.pathname));
+      if (!file.startsWith(root + path.sep) || !fs.existsSync(file)) return route.fulfill({ status: 404, body: 'Missing asset' });
+      return route.fulfill({ path: file, contentType: { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png' }[path.extname(file)] });
+    });
+    const page = await context.newPage(); const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    const goto = file => page.goto(`https://revisie.test/${file}.html`);
+    const openSubjectOptions = async key => page.locator(`[data-subject-card="${key}"]`).locator('..').locator('.item-actions > summary').click();
+    const appearance = async (colour, symbol) => {
+      await page.locator(`.subject-colour-options label[title="${colour}"]`).click();
+      await page.locator(`.subject-symbol-options label[title="${symbol.replaceAll('-', ' ')}"]`).click();
+      assert.equal(await page.locator('.subject-appearance-preview .subject-icon').getAttribute('class'), `subject-icon ${colour}`);
+      assert.equal(await page.locator(`.subject-appearance-preview [data-lucide="${symbol}"]`).count(), 1);
+    };
+    // Built-in subject customisation persists and reaches the library and overview.
+    await goto('subjects');
+    await openSubjectOptions('biology');
+    await page.locator('[data-subject-appearance="biology"]').click();
+    await appearance('purple', 'microscope');
+    await page.locator('.modal form [type="submit"]').click();
+    assert.equal(await page.locator('[data-subject-card="biology"] .subject-icon.purple').count(), 1);
+    await page.reload();
+    assert.equal(await page.locator('[data-subject-card="biology"] [data-lucide="microscope"]').count(), 1);
+    await goto('index');
+    assert.equal(await page.locator('a[href="biology.html"] .subject-icon.purple').count(), 1);
+    assert.equal(await page.locator('.streak-panel').evaluate(el => getComputedStyle(el).borderRadius), await page.locator('.continue-card').evaluate(el => getComputedStyle(el).borderRadius));
+    await goto('biology');
+    assert.equal(await page.locator('.subject-grid .subject-icon.purple').count(), 3);
+    // New subjects can choose their appearance without a page reload.
+    await goto('subjects');
+    await page.locator('#addSubject').click();
+    await page.locator('#newSubject').fill('Economics'); await page.locator('#newTopic').fill('Markets');
+    await appearance('yellow', 'briefcase-business');
+    await page.locator('.modal form [type="submit"]').click();
+    assert.equal(await page.locator('[data-subject-card="economics"] .subject-icon.yellow').count(), 1);
+    await page.locator('[data-filter="science"]').click();
+    assert.equal(await page.locator('.subject-style-wrap > .item-actions:visible, .custom-subject-wrap > .item-actions:visible').count(), 3, 'Hidden subjects must hide their controls');
+    await page.locator('[data-filter="all"]').click();
+    await page.reload();
+    assert.equal(await page.locator('[data-subject-card="economics"] [data-lucide="briefcase-business"]').count(), 1);
+    assert.equal(await page.locator('[data-delete-subject]:visible').count(), 0);
+    assert.equal(await page.locator('[data-edit-subject]:visible').count(), 0);
+    await openSubjectOptions('economics');
+    await page.locator('[data-edit-subject]').focus();
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.item-actions[open]').count(), 0);
+    assert.equal(await page.evaluate(() => document.activeElement.tagName), 'SUMMARY');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.locator('[data-delete-subject]:visible').count(), 1);
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.locator('[data-delete-subject]:visible').click();
+    assert.equal(await page.locator('[data-subject-card="economics"]').count(), 1);
+    assert.equal(await page.locator('.item-actions[open]').count(), 0);
+    await openSubjectOptions('economics');
+    await page.locator('h1').click();
+    assert.equal(await page.locator('.item-actions[open]').count(), 0);
+
+    // Profile photo is staged, compressed, saved, and shared by both avatar locations.
+    await goto('settings');
+    await page.locator('#displayName').fill('Sean');
+    const photo = await page.evaluate(() => {
+      const canvas = document.createElement('canvas'); canvas.width = 600; canvas.height = 300;
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#659375'; ctx.fillRect(0, 0, 600, 300);
+      return canvas.toDataURL('image/png').split(',')[1];
+    });
+    await page.locator('#profilePhoto').setInputFiles({ name: 'profile.png', mimeType: 'image/png', buffer: Buffer.from(photo, 'base64') });
+    await page.waitForFunction(() => document.querySelector('#profilePhotoStatus').textContent.includes('Photo ready'));
+    assert.equal(await page.locator('.avatar img').count(), 0, 'Photo should be staged until settings are saved');
+    assert.equal(await page.locator('#profilePhotoPreview img').evaluate(image => image.naturalWidth), 256);
+    await page.locator('#settingsForm [type="submit"]').click();
+    assert.equal(await page.locator('.avatar img').count(), 2);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('revisie-settings')).subjectAppearance.biology.color), 'purple', 'Saving profile must preserve subject styles');
+    await goto('index');
+    assert.equal(await page.locator('.avatar img').count(), 2);
+    assert.match(await page.locator('#overviewGreeting').innerText(), /Sean/);
+    await goto('settings');
+    await page.locator('#profilePhoto').setInputFiles({ name: 'invalid.txt', mimeType: 'text/plain', buffer: Buffer.from('not an image') });
+    await page.waitForFunction(() => document.querySelector('#profilePhotoStatus').textContent.includes('Choose a JPG'));
+    assert.equal(await page.locator('#settingsForm [type="submit"]').isEnabled(), true);
+    await page.locator('#removeProfilePhoto').click();
+    assert.equal(await page.locator('.avatar img').count(), 2);
+    await page.locator('#settingsForm [type="submit"]').click();
+    await page.reload(); assert.equal(await page.locator('.avatar img').count(), 0);
+    // Repeated creation, explicit close, and reload-safe drafts.
+    await goto('biology'); await page.locator('#subjectAddCard').click();
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'cardQuestion');
+    const checkSaveAlignment = async () => {
+      const a = await page.locator('[name="saveMode"][value="another"]').boundingBox();
+      const b = await page.locator('[name="saveMode"][value="close"]').boundingBox();
+      assert.equal(a.y, b.y, 'Save buttons should align vertically');
+      assert.equal(a.height, b.height, 'Save buttons should have the same height');
+    };
+    await checkSaveAlignment();
+    assert.equal(await page.locator('#cardSubject').inputValue(), 'biology');
+    const originalUnit = await page.locator('#cardUnit').inputValue();
+    await page.locator('#cardQuestion').fill('First personal question'); await page.locator('#cardAnswer').fill('First answer');
+    await page.locator('[name="saveMode"][value="another"]').click();
+    assert.equal(await page.locator('.modal').count(), 1);
+    assert.equal(await page.locator('#cardQuestion').inputValue(), '');
+    assert.match(await page.locator('#cardSaveStatus').innerText(), /1 card added/);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'cardQuestion');
+    await page.locator('#cardQuestion').fill('Second personal question'); await page.locator('#cardAnswer').fill('Second answer');
+    await page.locator('#cardAnswer').press('Control+Enter');
+    assert.match(await page.locator('#cardSaveStatus').innerText(), /2 cards added/);
+    // A duplicate leaves text intact and doesn't increment the saved count.
+    await page.locator('#cardQuestion').fill('Second personal question'); await page.locator('#cardAnswer').fill('Duplicate answer');
+    await page.locator('[name="saveMode"][value="another"]').click();
+    assert.match(await page.locator('#cardSaveStatus').innerText(), /already in the topic/);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('revisie-flashcards')).length), 2);
+    await page.locator('#cardQuestion').fill('Draft question'); await page.locator('#cardAnswer').fill('Draft answer');
+    await page.keyboard.press('Escape'); await page.reload(); await page.locator('#subjectAddCard').click();
+    assert.equal(await page.locator('#cardQuestion').inputValue(), 'Draft question');
+    assert.equal(await page.locator('#cardAnswer').inputValue(), 'Draft answer');
+    await page.locator('#cardUnit').selectOption('__new__');
+    assert.equal(await page.locator('#cardQuestion').inputValue(), '');
+    await page.locator('#cardNewTopic').fill('My new topic');
+    await page.locator('#cardQuestion').fill('New topic question'); await page.locator('#cardAnswer').fill('New topic answer');
+    await page.locator('[name="saveMode"][value="another"]').click();
+    assert.equal(await page.locator('#cardUnit').inputValue(), 'My new topic');
+    assert.equal(await page.evaluate(() => getDeck('biology', 'My new topic').length), 1, 'A new topic should contain only the card just created');
+    await page.locator('#cardUnit').selectOption(originalUnit);
+    assert.equal(await page.locator('#cardQuestion').inputValue(), 'Draft question', 'Switching topics should preserve each unfinished card');
+    await page.locator('[name="saveMode"][value="close"]').click();
+    assert.equal(await page.locator('.modal').count(), 0);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('revisie-flashcards')).length), 4);
+    await page.locator('#subjectManageCards').click();
+    assert.equal(await page.locator('[data-edit-card]:visible, [data-delete-card]:visible').count(), 0);
+    const cardOptions = page.locator('.managed-card').filter({ hasText: 'First personal question' }).locator('summary');
+    await cardOptions.click();
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.modal').count(), 1, 'Escape closes options before closing the manager');
+    assert.equal(await page.locator('.item-actions[open]').count(), 0);
+    await cardOptions.click();
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.locator('[data-delete-card]:visible').click();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('revisie-flashcards')).length), 4);
+    await cardOptions.click();
+    await page.locator('[data-edit-card]:visible').click();
+    await page.locator('#cardAnswer').fill('Edited answer');
+    await page.locator('.modal form [type="submit"]').click();
+    assert.match(await page.locator('.managed-card').filter({ hasText: 'First personal question' }).innerText(), /Edited answer/);
+    await page.locator('.managed-card').filter({ hasText: 'Draft question' }).locator('summary').click();
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('[data-delete-card]:visible').click();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('revisie-flashcards')).length), 3);
+    assert.equal(await page.locator('.managed-card').filter({ hasText: 'Draft question' }).count(), 0);
+    await page.keyboard.press('Escape');
+    await goto('flashcards'); await page.locator('#addFlashcard').click();
+    assert.equal(await page.locator('#cardSubject').inputValue(), 'biology');
+    assert.equal(await page.locator('#cardUnit').inputValue(), originalUnit);
+    assert.equal(await page.locator('#cardQuestion').inputValue(), '', 'A saved card must not return as a draft');
+    // Dialogs fit mobile and retain accessible labels and keyboard controls.
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 320, height: 740 });
+    await page.locator('#addFlashcard').click();
+    await checkSaveAlignment();
+    assert.equal(await page.locator('#cardQuestion').getAttribute('required'), '');
+    for (const selector of ['.modal', '.card-destination', '.card-writing', '.card-composer-footer']) {
+      const rect = await page.locator(selector).boundingBox(); assert.ok(rect.x >= 0 && rect.x + rect.width <= 320, `${selector} must fit on mobile`);
+    }
+    await page.keyboard.press('Escape');
+    await goto('subjects'); await openSubjectOptions('biology');
+    await page.waitForTimeout(50);
+    const menuBounds = await page.locator('.item-actions[open] .item-actions-list').boundingBox();
+    assert.ok(menuBounds.x >= 0 && menuBounds.x + menuBounds.width <= 320, 'Options menu must fit the mobile viewport');
+    await page.locator('[data-subject-appearance="biology"]').click();
+    const rect = await page.locator('.subject-symbol-options').boundingBox(); assert.ok(rect.x >= 0 && rect.x + rect.width <= 320);
+    await page.keyboard.press('Escape'); await goto('index');
+    assert.equal(await page.locator('.streak-panel').evaluate(el => getComputedStyle(el).borderRadius), await page.locator('.continue-card').evaluate(el => getComputedStyle(el).borderRadius), 'Main card surfaces share a radius on mobile');
+    assert.deepEqual(errors, [], 'No browser errors');
+    console.log('Passed subject appearance, custom subjects, filter controls, profile upload/removal, preference preservation, continuous card entry, keyboard save, duplicate protection, topic creation, drafts, and mobile dialogs.');
+  } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

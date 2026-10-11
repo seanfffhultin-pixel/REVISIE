@@ -105,6 +105,43 @@ function removeWorkspaceItem(key) {
   saveWorkspaceItem(key, 'null');
   nativeLocalStorageRemoveItem(key);
 }
+// Calendar dates, rather than elapsed milliseconds, keep streaks correct across DST.
+function studyDate(now = new Date()) {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+function shiftStudyDate(date, days) {
+  const next = new Date(`${date}T12:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+function validStudyDate(date) {
+  return typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(`${date}T12:00:00Z`)) && new Date(`${date}T12:00:00Z`).toISOString().slice(0, 10) === date;
+}
+function studyDays(value) {
+  let state;
+  try { state = typeof value === 'string' ? JSON.parse(value) : value; } catch { return []; }
+  if (!state || typeof state !== 'object') return [];
+  if (Array.isArray(state.days)) return [...new Set(state.days.filter(validStudyDate))].sort();
+  // The old counter only stored the end date and run length. Preserve that known run.
+  if (!validStudyDate(state.lastDate) || !Number.isInteger(state.current) || state.current < 1) return [];
+  return Array.from({ length: Math.min(state.current, 36600) }, (_, index) => shiftStudyDate(state.lastDate, -index)).sort();
+}
+function mergeWorkspaceStreak(baseValue, localValue, remoteValue) {
+  if (localValue == null || localValue === 'null') return localValue;
+  return JSON.stringify({ version: 2, days: [...new Set([...studyDays(localValue), ...studyDays(remoteValue)])].sort() });
+}
+function calculateStreak(value, today = studyDate()) {
+  const days = studyDays(value).filter((day) => day <= today);
+  let best = 0, run = 0, previous = '';
+  for (const day of days) {
+    run = previous && shiftStudyDate(previous, 1) === day ? run + 1 : 1;
+    best = Math.max(best, run); previous = day;
+  }
+  const lastDate = days.at(-1) || '';
+  const completedToday = lastDate === today;
+  const current = completedToday || lastDate === shiftStudyDate(today, -1) ? run : 0;
+  return { days, lastDate, current, best, completedToday, total: days.length };
+}
 function workspaceCardIdentity(card) { return card.id || JSON.stringify([card.subject, card.unit, normaliseQuestion(card.question)]); }
 function mergeWorkspaceCards(baseValue, localValue, remoteValue) {
   const parse = (value) => JSON.parse(value || '[]') || [];
@@ -131,7 +168,7 @@ function mergeWorkspaceTopics(baseValue, localValue, remoteValue) {
 function clearWorkspaceCache() {
   notePhotoCache.clear();
   syncedStorageKeys.forEach((key) => nativeLocalStorageRemoveItem(key));
-  [workspaceTimestampKey, workspacePendingKey, workspaceMigrationKey].forEach((key) => nativeLocalStorageRemoveItem(key));
+  [workspaceTimestampKey, workspacePendingKey, workspaceMigrationKey, 'revisie-flashcard-drafts', 'revisie-card-destination'].forEach((key) => nativeLocalStorageRemoveItem(key));
 }
 function refreshWorkspaceMemory() {
   for (const [key, target] of [['revisie-flashcards', userCards], ['revisie-subjects', customSubjects], ['revisie-note-library', noteLibrary], ['revisie-resources', resourceLibrary]]) {
@@ -145,6 +182,8 @@ function refreshWorkspaceMemory() {
   refreshFlashcardSurfaces();
   setupCustomSubjects(); setupCustomSubjectActions(); setupSubjectFilters(); setupOverviewRoute(); renderSubjectProgress();
   renderNoteSurfaces();
+  renderProfile(); setupSubjectAppearanceButtons(); syncSubjectPageLabel(); renderDeletedSubjectRoute(); lucide.createIcons();
+  refreshStreakSurfaces();
   void hydrateNotePhotos();
 }
 function syncWorkspaceNow() {
@@ -182,7 +221,7 @@ async function syncWorkspaceOnce() {
       const merged = { ...(remote?.data || {}) };
       for (const key of syncedStorageKeys) {
         if (pending[key]) {
-          const merge = key === 'revisie-flashcards' ? mergeWorkspaceCards : key === 'revisie-topics' ? mergeWorkspaceTopics : null;
+          const merge = key === 'revisie-flashcards' ? mergeWorkspaceCards : key === 'revisie-topics' ? mergeWorkspaceTopics : key === 'revisie-streak' ? mergeWorkspaceStreak : null;
           merged[key] = merge ? merge(pending[key].base, snapshot[key], remote?.data?.[key]) : snapshot[key];
         }
         else merged[key] = remote ? (remote.data?.[key] ?? null) : snapshot[key];
@@ -273,29 +312,156 @@ let resourceDatabasePromise;
 const customTopics = JSON.parse(localStorage.getItem('revisie-topics') || '{}');
 const customSubjectName = new URLSearchParams(location.search).get('name');
 if (customSubjectName) { currentSubject = customSubjectName.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!subjectData[currentSubject]) subjectData[currentSubject] = { label: customSubjectName, topic: 'My topic', board: 'Personal deck', cards: [['What do you want to remember?', 'Add the answer in your notes, then turn it into a flashcard.']] }; }
+const subjectColourPalette = {
+  coral: ['#faeee8', '#cd6048'], green: ['#e5f2e4', '#4f8955'], yellow: ['#fff4d5', '#a37e2d'], blue: ['#e4f0f7', '#39718c'], pink: ['#f8e6e5', '#ad696d'], purple: ['#eee7f5', '#80619c'],
+  red: ['#fbe7e6', '#b94e4a'], orange: ['#fff0df', '#b87533'], amber: ['#fbf1ce', '#9c781e'], lime: ['#eff4d7', '#7c8b36'], olive: ['#e9eddc', '#6e7f48'], teal: ['#e0f0e9', '#3d8571'], cyan: ['#def2f3', '#36818a'], sky: ['#e7f2fc', '#4d86b5'], indigo: ['#e9eafa', '#646bad'], violet: ['#f0e7fb', '#9167ba'], rose: ['#fbe8ef', '#b96884'], slate: ['#e9edf1', '#637587'], sand: ['#f3ede1', '#99815d'], graphite: ['#e8ebe9', '#58645d']
+};
+const subjectColours = Object.keys(subjectColourPalette);
+const subjectSymbols = ['book-open', 'sigma', 'leaf', 'flask-conical', 'atom', 'landmark', 'brain', 'languages', 'globe', 'palette', 'music', 'calculator', 'code', 'briefcase-business', 'scale', 'heart', 'drama', 'lightbulb', 'pen-tool', 'microscope'];
+const defaultSubjectStyles = Object.fromEntries(Object.entries(subjectData).map(([key, subject]) => [key, { color: subject.color || 'blue', icon: subject.icon || 'book-open', emoji: '' }]));
+const defaultSubjectBoards = Object.fromEntries(Object.entries(subjectData).map(([key, subject]) => [key, subject.board || 'AQA']));
+function subjectEntries() { return Object.entries(subjectData).filter(([, subject]) => !subject.deleted); }
+function subjectEmoji(value) {
+  if (typeof value !== 'string') return '';
+  const emoji = value.trim();
+  if (!emoji || emoji.length > 32 || !/\p{Extended_Pictographic}|\p{Regional_Indicator}|[0-9#*]\uFE0F?\u20E3/u.test(emoji)) return '';
+  if (typeof Intl.Segmenter === 'function' && [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(emoji)].length !== 1) return '';
+  return emoji;
+}
+function subjectStyle(value = {}) {
+  value = value || {};
+  return { color: subjectColours.includes(value.color) ? value.color : 'blue', icon: subjectSymbols.includes(value.icon) ? value.icon : 'book-open', emoji: subjectEmoji(value.emoji) };
+}
+function subjectSymbol(value) {
+  const emoji = subjectEmoji(value?.emoji);
+  return emoji ? `<span class="subject-emoji" aria-hidden="true">${escapeHtml(emoji)}</span>` : icon(value?.icon || 'book-open');
+}
+function subjectAppearanceFields(value = {}) {
+  const selected = subjectStyle(value);
+  const emojis = ['📚', '🧪', '🧬', '🧮', '🌍', '🎨', '🎵', '💻', '⚖️', '💡', '📝', '🧠'];
+  return `<div class="subject-appearance-fields"><fieldset><legend>Colour</legend><div class="subject-colour-options">${subjectColours.map((colour) => `<label title="${colour}"><input class="choice-input" type="radio" name="subjectColor" value="${colour}" ${colour === selected.color ? 'checked' : ''}><span class="colour-swatch ${colour}"><span class="sr-only">${colour}</span></span></label>`).join('')}</div></fieldset><fieldset><legend>Symbol</legend><div class="subject-symbol-options">${subjectSymbols.map((symbol) => `<label title="${symbol.replaceAll('-', ' ')}"><input class="choice-input" type="radio" name="subjectIcon" value="${symbol}" ${!selected.emoji && symbol === selected.icon ? 'checked' : ''}><span>${icon(symbol)}<span class="sr-only">${symbol.replaceAll('-', ' ')}</span></span></label>`).join('')}</div><label class="subject-emoji-label" for="subjectEmoji">Or use an emoji<input id="subjectEmoji" name="subjectEmoji" type="text" maxlength="32" value="${escapeHtml(selected.emoji)}" placeholder="Paste an emoji" autocomplete="off" spellcheck="false"></label><div class="subject-emoji-options" aria-label="Emoji suggestions">${emojis.map((emoji) => `<button type="button" data-subject-emoji="${emoji}" aria-label="Use ${emoji}">${emoji}</button>`).join('')}</div></fieldset><div class="subject-appearance-preview"><div class="subject-icon ${selected.color}">${subjectSymbol(selected)}</div><span>Preview</span></div></div>`;
+}
+function selectedSubjectStyle(form) {
+  return subjectStyle({ color: form.querySelector('[name="subjectColor"]:checked')?.value, icon: form.querySelector('[name="subjectIcon"]:checked')?.value, emoji: form.querySelector('[name="subjectEmoji"]')?.value });
+}
+function bindSubjectAppearance(form) {
+  const emoji = form.querySelector('[name="subjectEmoji"]');
+  const update = () => {
+    emoji.setCustomValidity(emoji.value.trim() && !subjectEmoji(emoji.value) ? 'Use one emoji, for example 🧪.' : '');
+    const preview = form.querySelector('.subject-appearance-preview .subject-icon'); if (!preview) return;
+    const style = selectedSubjectStyle(form);
+    preview.className = `subject-icon ${style.color}`; preview.innerHTML = subjectSymbol(style); lucide.createIcons();
+  };
+  form.addEventListener('change', (event) => { if (event.target.name === 'subjectIcon') emoji.value = ''; update(); });
+  emoji.addEventListener('input', () => { if (emoji.value.trim()) form.querySelectorAll('[name="subjectIcon"]').forEach((input) => { input.checked = false; }); update(); });
+  form.querySelectorAll('[data-subject-emoji]').forEach((button) => button.addEventListener('click', () => {
+    emoji.value = button.dataset.subjectEmoji; form.querySelectorAll('[name="subjectIcon"]').forEach((input) => { input.checked = false; }); update();
+  }));
+}
+function customiseSubject(subjectKey) {
+  const subject = subjectData[subjectKey]; if (!subject) return;
+  const backdrop = openModal(`${subject.label} appearance`, `<form class="notes-form">${subjectAppearanceFields(subject)}<button class="primary-button" type="submit">Save changes</button></form>`);
+  const form = backdrop.querySelector('form'); bindSubjectAppearance(form);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+    settings.subjectAppearance = { ...settings.subjectAppearance, [subjectKey]: selectedSubjectStyle(form) };
+    saveWorkspaceItem('revisie-settings', JSON.stringify(settings));
+    registerCustomSubjects(); closeModal(); refreshSubjectAppearance(); notify('Subject updated.');
+  });
+}
+function editSubjectBoard(subjectKey) {
+  const subject = subjectData[subjectKey]; if (!subject || subject.deleted) return;
+  const backdrop = openModal(`${subject.label} exam board`, `<form class="notes-form"><label class="upload-label" for="subjectBoard">Exam board</label><input id="subjectBoard" class="note-title" list="examBoards" required maxlength="80" value="${escapeHtml(subject.board === 'Personal deck' ? '' : subject.board)}" placeholder="Choose or type an exam board"><datalist id="examBoards">${['AQA', 'Pearson Edexcel', 'OCR', 'WJEC', 'Eduqas', 'CCEA', 'Cambridge International', 'SQA'].map((board) => `<option value="${board}"></option>`).join('')}</datalist><button class="primary-button" type="submit">Save changes</button></form>`);
+  const input = backdrop.querySelector('#subjectBoard');
+  input.addEventListener('input', () => input.setCustomValidity(''));
+  backdrop.querySelector('form').addEventListener('submit', (event) => {
+    event.preventDefault(); const board = input.value.trim();
+    if (!board) { input.setCustomValidity('Enter an exam board.'); input.reportValidity(); return; }
+    const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+    settings.subjectBoards = { ...settings.subjectBoards, [subjectKey]: board };
+    saveWorkspaceItem('revisie-settings', JSON.stringify(settings));
+    registerCustomSubjects(); closeModal(); refreshSubjectAppearance(); notify('Exam board updated.');
+  });
+}
+function itemActions(label, buttons) {
+  return `<details class="item-actions"><summary aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${icon('ellipsis')}<span class="sr-only">${escapeHtml(label)}</span></summary><div class="item-actions-list">${buttons}</div></details>`;
+}
+function itemAction(label, symbol, attributes, destructive = false) {
+  return `<button type="button" ${attributes}${destructive ? ' class="destructive-action"' : ''}>${icon(symbol)}<span>${escapeHtml(label)}</span></button>`;
+}
+function setupSubjectAppearanceButtons() {
+  if (location.pathname.endsWith('subjects.html')) {
+    document.querySelectorAll('[data-subject-card]').forEach((card) => {
+      const key = card.dataset.subjectCard;
+      let wrap = card.parentElement;
+      if (!wrap.classList.contains('custom-subject-wrap') && !wrap.classList.contains('subject-style-wrap')) {
+        wrap = document.createElement('div'); wrap.className = 'subject-style-wrap'; card.replaceWith(wrap); wrap.appendChild(card);
+      }
+      if (wrap.querySelector('.item-actions')) return;
+      const index = customSubjects.findIndex((subject) => subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === key);
+      let buttons = itemAction('Colour and symbol', 'palette', `data-subject-appearance="${key}"`) + itemAction('Change exam board', 'graduation-cap', `data-subject-board="${key}"`);
+      if (index >= 0 && !builtInSubjectKeys.has(key)) buttons += itemAction('Edit subject', 'pencil', `data-edit-subject="${index}"`);
+      buttons += itemAction('Delete subject', 'trash-2', `data-delete-subject="${key}"`, true);
+      wrap.insertAdjacentHTML('beforeend', itemActions(`Options for ${subjectData[key]?.label || key}`, buttons));
+      wrap.querySelector('[data-subject-appearance]').addEventListener('click', () => customiseSubject(key));
+      wrap.querySelector('[data-subject-board]').addEventListener('click', () => editSubjectBoard(key));
+      wrap.querySelector('[data-edit-subject]')?.addEventListener('click', () => editSubject(index));
+      wrap.querySelector('[data-delete-subject]')?.addEventListener('click', () => void deleteSubject(key));
+    });
+  }
+  const actions = document.querySelector('.page-intro .subject-actions');
+  if (actions && document.getElementById('subjectAddCard') && !actions.querySelector('[data-subject-appearance]')) {
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary-button'; button.dataset.subjectAppearance = currentSubject; button.innerHTML = `Appearance ${icon('palette')}`;
+    button.addEventListener('click', () => customiseSubject(currentSubject)); actions.appendChild(button);
+    const boardButton = document.createElement('button'); boardButton.type = 'button'; boardButton.className = 'secondary-button'; boardButton.dataset.subjectBoard = currentSubject; boardButton.innerHTML = `Exam board ${icon('graduation-cap')}`;
+    boardButton.addEventListener('click', () => editSubjectBoard(currentSubject)); actions.appendChild(boardButton);
+  }
+}
+function refreshSubjectAppearance() {
+  setupCustomSubjects(); setupCustomSubjectActions(); setupSubjectFilters(); setupOverviewRoute(); setupSubjectUnits(); setupFlashcardLibrary(); setupSubjectAppearanceButtons(); syncSubjectPageLabel(); renderTopicProgress(); renderDeletedSubjectRoute(); lucide.createIcons();
+}
 function registerCustomSubjects() {
   const keys = new Set(customSubjects.map((subject) => subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')));
   Object.keys(subjectData).forEach((key) => { if (subjectData[key].category === 'custom' && !keys.has(key)) delete subjectData[key]; });
   customSubjects.forEach((subject) => {
     const key = subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    if (!builtInSubjectKeys.has(key)) subjectData[key] = { label: subject.name, topic: subject.topic || 'My topic', board: 'Personal deck', category: 'custom', color: 'blue', icon: 'book-open', cards: [] };
+    if (!builtInSubjectKeys.has(key)) subjectData[key] = { label: subject.name, topic: subject.topic || 'My topic', board: 'Personal deck', category: 'custom', ...subjectStyle(subject), cards: [] };
+  });
+  const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+  const appearances = settings.subjectAppearance || {};
+  Object.entries(subjectData).forEach(([key, subject]) => {
+    subject.deleted = (settings.deletedSubjects || []).includes(key);
+    if (builtInSubjectKeys.has(key)) Object.assign(subject, defaultSubjectStyles[key]);
+    if (appearances[key]) Object.assign(subject, subjectStyle(appearances[key]));
+    subject.board = settings.subjectBoards?.[key] || (builtInSubjectKeys.has(key) ? defaultSubjectBoards[key] : 'Personal deck');
   });
 }
 registerCustomSubjects();
 function getUnits(subjectKey) {
-  const builtIn = subjectData[subjectKey]?.topics || [{ name: subjectData[subjectKey]?.topic || 'My topic', cards: subjectData[subjectKey]?.cards || [] }];
+  if (!subjectData[subjectKey] || subjectData[subjectKey].deleted) return [];
+  const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+  const removed = settings.deletedTopics?.[subjectKey] || [];
+  const names = settings.topicNames?.[subjectKey] || {};
+  const builtIn = (subjectData[subjectKey].topics || [{ name: subjectData[subjectKey].topic || 'My topic', cards: subjectData[subjectKey].cards || [] }]).filter((unit) => !removed.includes(unit.name)).map((unit) => ({ ...unit, sourceName: unit.name, name: names[unit.name] || unit.name }));
   const personal = (customTopics[subjectKey] || []).map((topic) => ({ name: topic.name, cards: topic.cards || buildUnitDeck(subjectKey, topic.name), custom: true }));
   const units = [...builtIn, ...personal];
-  // Older saves or a partial cloud restore may have cards without topic metadata.
-  // Keep those decks reachable instead of silently hiding the cards.
-  userCards.filter((card) => card.subject === subjectKey && card.unit).forEach((card) => {
-    if (!units.some((unit) => unit.name === card.unit)) units.push({ name: card.unit, cards: [], recovered: true });
+  userCards.filter((card) => card.subject === subjectKey).forEach((card) => {
+    if (!removed.includes(card.unit) && !units.some((unit) => unit.name === card.unit)) units.push({ name: card.unit, cards: [], recovered: true });
   });
   return units;
 }
 function starterCardKey(subjectKey, unitName, index) { return `${subjectKey}::${unitName}::${index}`; }
-function getStarterDeck(subjectKey, unitName) { const unit = getUnits(subjectKey).find((item) => item.name === unitName) || getUnits(subjectKey)[0]; return unit.cards.map((card, index) => { const saved = starterCardOverrides[starterCardKey(subjectKey, unit.name, index)]; return saved ? [saved.question, saved.answer] : card; }); }
-function getDeck(subjectKey, unitName) { const unit = getUnits(subjectKey).find((item) => item.name === unitName) || getUnits(subjectKey)[0]; return uniqueCards([...getStarterDeck(subjectKey, unit.name), ...userCards.filter((card) => card.subject === subjectKey && card.unit === unit.name).map((card) => [card.question, card.answer])]); }
+function getStarterDeck(subjectKey, unitName) {
+  const units = getUnits(subjectKey); const unit = unitName ? units.find((item) => item.name === unitName) : units[0];
+  if (!unit) return [];
+  return unit.cards.map((card, index) => { const saved = starterCardOverrides[starterCardKey(subjectKey, unit.name, index)]; return saved ? [saved.question, saved.answer] : card; });
+}
+function getDeck(subjectKey, unitName) {
+  const units = getUnits(subjectKey); const unit = unitName ? units.find((item) => item.name === unitName) : units[0];
+  if (!unit) return [];
+  return uniqueCards([...getStarterDeck(subjectKey, unit.name), ...userCards.filter((card) => card.subject === subjectKey && card.unit === unit.name).map((card) => [card.question, card.answer])]);
+}
 const toast = document.getElementById('toast');
 let toastTimer;
 function icon(name) { return `<i data-lucide="${name}"></i>`; }
@@ -329,8 +495,8 @@ personalStyles.textContent = '.account-panel{display:flex;align-items:center;gap
 document.head.appendChild(personalStyles);
 function notify(message) { if (!toast) return; toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 2800); }
 function normalizeSidebar() { const sidebar = document.querySelector('.sidebar'); if (!sidebar || sidebar.dataset.ready === "true") return; sidebar.innerHTML = `<a class="brand brand-logo" href="index.html" aria-label="REVISIÉ home"><img src="assets/revisie-logo.png?v=2" alt="REVISIÉ" width="148" height="63"></a><div class="workspace-switcher"><div class="avatar small">SH</div><div><strong>Sean's workspace</strong><small>GCSE Higher Tier</small></div>${icon('chevrons-up-down')}</div><nav class="main-nav" aria-label="Main navigation"><p class="nav-label">Workspace</p><a class="nav-item" data-page="index.html" href="index.html">${icon('layout-dashboard')}Overview</a><a class="nav-item" data-page="subjects.html" href="subjects.html">${icon('library')}Subjects<span class="nav-count">10</span></a><a class="nav-item" data-page="flashcards.html" href="flashcards.html">${icon('layers-3')}Flashcards<span class="nav-count alert">18</span></a><a class="nav-item" data-page="notes.html" href="notes.html">${icon('notebook-pen')}Notes</a><a class="nav-item" data-page="resources.html" href="resources.html">${icon('folder-open')}Resources</a><p class="nav-label second">Tools</p><a class="nav-item" data-page="planner.html" href="planner.html">${icon('calendar-days')}Revision planner</a><a class="nav-item" data-page="progress.html" href="progress.html">${icon('chart-no-axes-combined')}Progress</a></nav>`; }
-function subjectCount() { return Object.keys(subjectData).length + customSubjects.filter((subject) => !subjectData[subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')]).length; }
-function remainingFlashcardCount() { const saved = topicProgress(); return Object.keys(subjectData).reduce((total, subjectKey) => total + getUnits(subjectKey).reduce((unitTotal, unit) => unitTotal + Math.max(0, getDeck(subjectKey, unit.name).length - Number(saved[topicProgressKey(subjectKey, unit.name)] || 0)), 0), 0); }
+function subjectCount() { return subjectEntries().length; }
+function remainingFlashcardCount() { const saved = topicProgress(); return subjectEntries().map(([key]) => key).reduce((total, subjectKey) => total + getUnits(subjectKey).reduce((unitTotal, unit) => unitTotal + Math.max(0, getDeck(subjectKey, unit.name).length - Number(saved[topicProgressKey(subjectKey, unit.name)] || 0)), 0), 0); }
 function updateNavigationCounts() { const subjects = document.querySelector('[data-page="subjects.html"] .nav-count'); const flashcards = document.querySelector('[data-page="flashcards.html"] .nav-count'); const totalSubjects = subjectCount(); const remainingCards = remainingFlashcardCount(); if (subjects) { subjects.textContent = totalSubjects; subjects.title = `${totalSubjects} subjects`; } if (flashcards) { flashcards.textContent = remainingCards; flashcards.title = `${remainingCards} flashcards remaining`; } }
 function normalizeTopbar() {
   const topbar = document.querySelector('.topbar');
@@ -397,9 +563,9 @@ async function shareItem(itemType, title, payload) { try { const client = await 
 function shareNote(noteId) { const note = noteLibrary.find((item) => item.id === Number(noteId)); if (note) shareItem('note', note.title, note); }
 function shareResource(resourceId) { const resource = resourceLibrary.find((item) => String(item.id) === String(resourceId)); if (resource) shareItem('pdf', resource.name, resource); }
 function shareDeck(subjectKey, unitName) { const subject = subjectData[subjectKey]; const cards = getDeck(subjectKey, unitName).map(([question, answer]) => ({ question, answer })); if (subject && cards.length) shareItem('deck', `${escapeHtml(subject.label)}: ${unitName}`, { subject: subjectKey, subjectLabel: subject.label, unit: unitName, cards }); }
-function shareSubject(subjectKey) { const custom = customSubjects.find((item) => item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === subjectKey); const subject = subjectData[subjectKey] || (custom && { label: custom.name, topic: custom.topic, color: 'blue', icon: 'book-open' }); if (!subject) return; shareItem('subject', subject.label, { sourceKey: subjectKey, subject: { name: subject.label, topic: subject.topic || 'First topic' }, topics: customTopics[subjectKey] || [], cards: userCards.filter((card) => card.subject === subjectKey) }); }
+function shareSubject(subjectKey) { const custom = customSubjects.find((item) => item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === subjectKey); const subject = subjectData[subjectKey] || (custom && { label: custom.name, topic: custom.topic, color: 'blue', icon: 'book-open' }); if (!subject) return; shareItem('subject', subject.label, { sourceKey: subjectKey, subject: { name: subject.label, topic: subject.topic || 'First topic', ...subjectStyle(subject) }, topics: customTopics[subjectKey] || [], cards: userCards.filter((card) => card.subject === subjectKey) }); }
 function sharedItemPreview(item) { const payload = item.payload || {}; if (item.item_type === 'note') return `<p>${escapeHtml(payload.body || 'No written content.')}</p>${payload.image ? '<p class="auth-note">Includes an attached photo.</p>' : ''}`; if (item.item_type === 'pdf') return `<p>PDF · ${Math.ceil(Number(payload.size || 0) / 1024)} KB</p>`; if (item.item_type === 'deck') return `<p>${payload.cards?.length || 0} flashcards · ${escapeHtml(payload.subjectLabel || payload.subject || 'Subject')} / ${escapeHtml(payload.unit || 'Topic')}</p>`; if (item.item_type === 'subject') return `<p>${escapeHtml(payload.subject?.topic || 'Personal subject')} · ${payload.cards?.length || 0} personal flashcards</p>`; return '<p>This shared item is not available.</p>'; }
-async function addSharedItem(item) { const payload = item.payload || {}; if (item.item_type === 'note') { const note = { ...payload, id: Date.now(), updatedAt: new Date().toISOString() }; noteLibrary.unshift(note); saveWorkspaceItem('revisie-note-library', JSON.stringify(noteLibrary)); return 'Note saved to your workspace.'; } if (item.item_type === 'pdf') { const resource = { ...payload, id: Date.now(), savedAt: new Date().toISOString() }; await persistResourceFile(resource); resourceLibrary.push(resource); saveResourceMetadata(); return 'PDF saved to your workspace.'; } const subjectKey = payload.sourceKey || payload.subject || payload.subject?.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-'); const subjectName = payload.subject?.name || payload.subjectLabel || subjectKey; if (!subjectData[subjectKey] && !customSubjects.some((subject) => subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === subjectKey)) { customSubjects.push({ name: subjectName, topic: payload.subject?.topic || 'First topic' }); saveWorkspaceItem('revisie-subjects', JSON.stringify(customSubjects)); } if (item.item_type === 'subject' && payload.topics?.length) { customTopics[subjectKey] = [...(customTopics[subjectKey] || []), ...payload.topics.filter((topic) => !(customTopics[subjectKey] || []).some((existing) => existing.name.toLowerCase() === topic.name.toLowerCase()))]; saveWorkspaceItem('revisie-topics', JSON.stringify(customTopics)); } const cards = item.item_type === 'deck' ? (payload.cards || []).map((card) => ({ subject: subjectKey, unit: payload.unit || 'Shared deck', question: card.question, answer: card.answer })) : (payload.cards || []).map((card) => ({ ...card, subject: subjectKey })); let saved = 0; cards.forEach((card) => { if (!userCards.some((existing) => existing.subject === card.subject && existing.unit === card.unit && normaliseQuestion(existing.question) === normaliseQuestion(card.question))) { userCards.push(card); saved += 1; } }); if (cards.length) saveWorkspaceItem('revisie-flashcards', JSON.stringify(userCards)); return item.item_type === 'deck' ? `${saved} flashcards saved to your workspace.` : 'Subject saved to your workspace.'; }
+async function addSharedItem(item) { const payload = item.payload || {}; if (item.item_type === 'note') { const note = { ...payload, id: Date.now(), updatedAt: new Date().toISOString() }; noteLibrary.unshift(note); saveWorkspaceItem('revisie-note-library', JSON.stringify(noteLibrary)); return 'Note saved to your workspace.'; } if (item.item_type === 'pdf') { const resource = { ...payload, id: Date.now(), savedAt: new Date().toISOString() }; await persistResourceFile(resource); resourceLibrary.push(resource); saveResourceMetadata(); return 'PDF saved to your workspace.'; } const subjectKey = payload.sourceKey || payload.subject || payload.subject?.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-'); const subjectName = payload.subject?.name || payload.subjectLabel || subjectKey; if (!subjectData[subjectKey] && !customSubjects.some((subject) => subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === subjectKey)) { customSubjects.push({ name: subjectName, topic: payload.subject?.topic || 'First topic', ...subjectStyle(payload.subject) }); saveWorkspaceItem('revisie-subjects', JSON.stringify(customSubjects)); } if (item.item_type === 'subject' && payload.topics?.length) { customTopics[subjectKey] = [...(customTopics[subjectKey] || []), ...payload.topics.filter((topic) => !(customTopics[subjectKey] || []).some((existing) => existing.name.toLowerCase() === topic.name.toLowerCase()))]; saveWorkspaceItem('revisie-topics', JSON.stringify(customTopics)); } const cards = item.item_type === 'deck' ? (payload.cards || []).map((card) => ({ subject: subjectKey, unit: payload.unit || 'Shared deck', question: card.question, answer: card.answer })) : (payload.cards || []).map((card) => ({ ...card, subject: subjectKey })); let saved = 0; cards.forEach((card) => { if (!userCards.some((existing) => existing.subject === card.subject && existing.unit === card.unit && normaliseQuestion(existing.question) === normaliseQuestion(card.question))) { userCards.push(card); saved += 1; } }); if (cards.length) saveWorkspaceItem('revisie-flashcards', JSON.stringify(userCards)); return item.item_type === 'deck' ? `${saved} flashcards saved to your workspace.` : 'Subject saved to your workspace.'; }
 async function setupSharedItemPage() { if (!location.pathname.endsWith('share.html')) return; const id = new URLSearchParams(location.search).get('id'); const title = document.getElementById('sharedTitle'); const description = document.getElementById('sharedDescription'); const preview = document.getElementById('sharedPreview'); const save = document.getElementById('saveSharedItem'); const status = document.getElementById('sharedStatus'); if (!id) { title.textContent = 'Link unavailable.'; description.textContent = 'This share link is missing its item ID.'; return; } try { const client = await getSupabaseClient(); const { data, error } = await client.rpc('get_shared_item', { share_id: id }); if (error) throw error; const item = data?.[0]; if (!item) throw new Error('This share link is unavailable or has been removed.'); title.textContent = item.title; description.textContent = `A shared ${item.item_type === 'pdf' ? 'PDF' : item.item_type}.`; preview.innerHTML = sharedItemPreview(item); save.hidden = false; save.addEventListener('click', async () => { const { data: { user } } = await client.auth.getUser(); if (!user) { location.href = `account.html?mode=login`; return; } const message = await addSharedItem(item); await syncWorkspaceNow(); status.textContent = message; save.disabled = true; save.textContent = 'Saved'; }); } catch (error) { title.textContent = 'Link unavailable.'; description.textContent = error.message || 'This shared item could not be opened.'; } }
 function closeModal() {
   document.querySelector('.modal-backdrop')?.remove();
@@ -412,7 +578,7 @@ function closeModal() {
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]); }
 function subjectRoute(subjectKey) { const subject = subjectData[subjectKey]; return ['mathematics', 'biology', 'history', 'psychology'].includes(subjectKey) ? `${subjectKey}.html` : `subject.html?name=${encodeURIComponent(subject?.label || subjectKey)}`; }
 function openSiteSearch() {
-  const entries = Object.entries(subjectData).flatMap(([key, subject]) => [{ key, type: 'Subject', title: subject.label, detail: subject.topic }].concat(getUnits(key).flatMap((unit) => [{ key, type: 'Topic', title: unit.name, detail: subject.label }, ...getDeck(key, unit.name).map(([question]) => ({ key, type: 'Flashcard', title: question, detail: `${escapeHtml(subject.label)} · ${escapeHtml(unit.name)}` }))])));
+  const entries = subjectEntries().flatMap(([key, subject]) => [{ key, type: 'Subject', title: subject.label, detail: getUnits(key)[0]?.name || 'No topics yet' }].concat(getUnits(key).flatMap((unit) => [{ key, type: 'Topic', title: unit.name, detail: subject.label }, ...getDeck(key, unit.name).map(([question]) => ({ key, type: 'Flashcard', title: question, detail: `${escapeHtml(subject.label)} · ${escapeHtml(unit.name)}` }))])));
   const backdrop = openModal('Search', `<form class="notes-form" id="siteSearchForm"><input id="siteSearchInput" class="note-title" type="search" autocomplete="off" placeholder="Search subjects, topics, or flashcards"><div id="siteSearchResults" class="search-results" aria-live="polite"></div></form>`);
   const input = backdrop.querySelector('#siteSearchInput'); const results = backdrop.querySelector('#siteSearchResults');
   const render = () => { const query = normaliseQuestion(input.value); if (!query) { results.innerHTML = '<p class="empty-state">Search your subjects, topics, or flashcard questions.</p>'; return; } const matches = entries.filter((entry) => normaliseQuestion(`${entry.title} ${entry.detail}`).includes(query)).slice(0, 12); results.innerHTML = matches.length ? matches.map((entry) => `<button type="button" class="search-result" data-search-subject="${escapeHtml(entry.key)}"><span>${escapeHtml(entry.type)}</span><strong>${escapeHtml(entry.title)}</strong><small>${escapeHtml(entry.detail)}</small></button>`).join('') : '<p class="empty-state">No matching subjects, topics, or flashcards.</p>'; results.querySelectorAll('[data-search-subject]').forEach((button) => button.addEventListener('click', () => { location.href = subjectRoute(button.dataset.searchSubject); })); };
@@ -547,24 +713,15 @@ function persistFlashcards(cards) {
   userCards.splice(0, userCards.length, ...next);
   refreshFlashcardSurfaces();
 }
-async function saveCreatedFlashcard(backdrop, subject, unit) {
-  const question = backdrop.querySelector('#cardQuestion').value.trim();
-  const answer = backdrop.querySelector('#cardAnswer').value.trim();
-  if (!question || !answer) { notify('Enter a question and an answer.'); return; }
-  if (getDeck(subject, unit).some((card) => normaliseQuestion(card[0]) === normaliseQuestion(question))) { notify('That question is already in this deck.'); return; }
-  try { persistFlashcards([{ subject, unit, question, answer }]); }
-  catch { notify('Could not save in this browser. Free some storage and try again; your form is still open.'); return; }
-  closeModal(); notify('Flashcard saved on this device.');
-  const synced = await syncWorkspaceNow();
-  notify(synced ? 'Flashcard saved and synced to your account.' : 'Flashcard saved on this device. Sign in or reconnect to sync.');
-}
 function downloadFlashcards(cards, filename = 'revisie-flashcards.json') {
   const url = URL.createObjectURL(new Blob([JSON.stringify({ cards }, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = filename; document.body.appendChild(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function openFlashcardImport(subjectKey = currentSubject) {
-  const options = Object.entries(subjectData).map(([key, subject]) => `<option value="${escapeHtml(key)}" ${key === subjectKey ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`).join('');
+  if (!subjectEntries().length) { openModal('Add a subject first', '<p class="empty-state">Add a subject from the Subjects page before importing flashcards.</p><a class="primary-button" href="subjects.html">Go to Subjects</a>'); return; }
+  if (!subjectData[subjectKey] || subjectData[subjectKey].deleted) subjectKey = subjectEntries()[0][0];
+  const options = subjectEntries().map(([key, subject]) => `<option value="${escapeHtml(key)}" ${key === subjectKey ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`).join('');
   const backdrop = openModal('Import flashcards', `<form class="notes-form" id="flashcardImportForm">
     <p class="import-help">Paste many cards at once, or upload a TXT, TSV, CSV, or JSON file. All cards go into the subject and topic you choose below.</p>
     <details class="import-help"><summary>From Quizlet</summary><p>On the Quizlet website, open a set you created → More (…) → Export → choose a tab between terms and definitions and a new line between cards → Copy text. Paste it below. Quizlet only exports your own original sets; the app does not offer export.</p><a href="https://help.quizlet.com/hc/en-us/articles/360034345672-Exporting-your-sets" target="_blank" rel="noopener">Quizlet export guide</a></details>
@@ -617,14 +774,92 @@ function openFlashcardImport(subjectKey = currentSubject) {
     const synced = await syncWorkspaceNow(); notify(synced ? `${ready.length} flashcards imported and synced.` : 'Imported cards saved on this device. Sign in or reconnect to sync.');
   });
 }
-function addFlashcard() { const subjectOptions = Object.entries(subjectData).filter(([key]) => key !== 'psychology').map(([key, subject]) => `<option value="${key}">${escapeHtml(subject.label)}</option>`).join(''); const backdrop = openModal('Make a flashcard', `<form class="notes-form"><label class="upload-label" for="cardSubject">Subject</label><select id="cardSubject" class="note-subject">${subjectOptions}</select><label class="upload-label" for="cardUnit">Unit / topic</label><select id="cardUnit" class="note-subject"></select><input id="cardQuestion" class="note-title" required placeholder="Question or prompt"><textarea id="cardAnswer" required placeholder="Answer"></textarea><button class="primary-button" type="submit">Save flashcard ${icon('plus')}</button></form>`); const subjectSelect = backdrop.querySelector('#cardSubject'); const unitSelect = backdrop.querySelector('#cardUnit'); const updateUnits = () => { unitSelect.innerHTML = getUnits(subjectSelect.value).map((unit) => `<option>${escapeHtml(unit.name)}</option>`).join(''); }; subjectSelect.addEventListener('change', updateUnits); updateUnits(); backdrop.querySelector('form').addEventListener('submit', (event) => { event.preventDefault(); void saveCreatedFlashcard(backdrop, subjectSelect.value, unitSelect.value); }); }
-function addFlashcardFor(subjectKey, unitName) { const subject = subjectData[subjectKey]; const backdrop = openModal(`New ${subject.label} flashcard`, `<form class="notes-form"><label class="upload-label">Unit / topic</label><select id="cardUnit" class="note-subject">${getUnits(subjectKey).map((unit) => `<option ${unit.name === unitName ? 'selected' : ''}>${escapeHtml(unit.name)}</option>`).join('')}</select><input id="cardQuestion" class="note-title" required placeholder="Question or prompt"><textarea id="cardAnswer" required placeholder="Answer"></textarea><button class="primary-button" type="submit">Save flashcard ${icon('plus')}</button></form>`); backdrop.querySelector('form').addEventListener('submit', (event) => { event.preventDefault(); void saveCreatedFlashcard(backdrop, subjectKey, backdrop.querySelector('#cardUnit').value); }); }
+function readCardDrafts() {
+  try { const value = JSON.parse(localStorage.getItem('revisie-flashcard-drafts') || '{}'); return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; } catch { return {}; }
+}
+function openCardComposer(subjectKey = '', unitName = '') {
+  if (!subjectEntries().length) { openModal('Add a subject first', '<p class="empty-state">Add a subject from the Subjects page before making flashcards.</p><a class="primary-button" href="subjects.html">Go to Subjects</a>'); return; }
+  let previous;
+  try { previous = JSON.parse(localStorage.getItem('revisie-card-destination') || '{}'); } catch { previous = {}; }
+  const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+  const isActive = (key) => subjectData[key] && !subjectData[key].deleted;
+  const initialSubject = isActive(subjectKey) ? subjectKey : isActive(previous?.subject) ? previous.subject : isActive(settings.subject) ? settings.subject : isActive(currentSubject) ? currentSubject : subjectEntries()[0][0];
+  const initialUnit = unitName || (previous?.subject === initialSubject ? previous.unit : '');
+  const backdrop = openModal('Add flashcards', `<form class="notes-form card-composer" id="cardComposer"><div class="card-destination"><label for="cardSubject">Subject<select id="cardSubject" class="note-subject">${subjectEntries().map(([key, subject]) => `<option value="${key}" ${key === initialSubject ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`).join('')}</select></label><label for="cardUnit">Topic<select id="cardUnit" class="note-subject"></select></label></div><label class="new-card-topic" for="cardNewTopic" hidden>New topic<input id="cardNewTopic" class="note-title" placeholder="Topic name" maxlength="120"></label><div class="card-writing"><label for="cardQuestion">Question<textarea id="cardQuestion" required placeholder="What do you want to remember?"></textarea></label><label for="cardAnswer">Answer<textarea id="cardAnswer" required placeholder="Write the answer…"></textarea></label></div><p id="cardSaveStatus" class="card-save-status" role="status"></p><div class="card-composer-footer"><span class="card-draft-hint">Unfinished cards are kept as drafts.</span><div><button class="primary-button" type="submit" name="saveMode" value="another">Save & add another</button><button class="secondary-button" type="submit" name="saveMode" value="close">Save & close</button></div></div><p class="card-shortcut">⌘ / Ctrl + Enter to save and add another</p></form>`);
+  backdrop.dataset.cardComposer = 'true';
+  const form = backdrop.querySelector('form'); const subject = backdrop.querySelector('#cardSubject'); const unit = backdrop.querySelector('#cardUnit');
+  const question = backdrop.querySelector('#cardQuestion'); const answer = backdrop.querySelector('#cardAnswer'); const topic = backdrop.querySelector('#cardNewTopic'); const topicLabel = backdrop.querySelector('.new-card-topic'); const status = backdrop.querySelector('#cardSaveStatus');
+  let activeSubject = initialSubject, activeUnit = '', added = 0;
+  const draftKey = () => JSON.stringify([activeSubject, activeUnit]);
+  const rememberDestination = () => { try { saveWorkspaceItem('revisie-card-destination', JSON.stringify({ subject: activeSubject, unit: activeUnit })); } catch { /* Card saving still works if storage is full. */ } };
+  const saveDraft = () => {
+    try {
+      const drafts = readCardDrafts();
+      if (question.value || answer.value || topic.value) drafts[draftKey()] = { question: question.value, answer: answer.value, topic: topic.value };
+      else delete drafts[draftKey()];
+      saveWorkspaceItem('revisie-flashcard-drafts', JSON.stringify(drafts));
+    } catch { status.textContent = 'Could not keep the draft. Leave this form open until you save the card.'; }
+  };
+  const restoreDraft = () => {
+    const draft = readCardDrafts()[draftKey()] || {};
+    question.value = typeof draft.question === 'string' ? draft.question : ''; answer.value = typeof draft.answer === 'string' ? draft.answer : ''; topic.value = typeof draft.topic === 'string' ? draft.topic : '';
+    topicLabel.hidden = activeUnit !== '__new__'; topic.required = !topicLabel.hidden;
+    status.textContent = question.value || answer.value ? 'Unfinished card restored.' : '';
+    question.setCustomValidity(''); answer.setCustomValidity(''); rememberDestination();
+  };
+  const loadUnits = (selected = '') => {
+    const units = getUnits(subject.value);
+    unit.innerHTML = units.map((item) => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join('') + '<option value="__new__">+ New topic</option>';
+    unit.value = selected === '__new__' || units.some((item) => item.name === selected) ? selected : units[0]?.name || '__new__';
+    activeSubject = subject.value; activeUnit = unit.value; restoreDraft();
+  };
+  loadUnits(initialUnit);
+  subject.addEventListener('change', () => { saveDraft(); loadUnits(); });
+  unit.addEventListener('change', () => { saveDraft(); activeUnit = unit.value; restoreDraft(); if (!topicLabel.hidden) topic.focus(); });
+  [question, answer, topic].forEach((input) => input.addEventListener('input', () => { input.setCustomValidity(''); saveDraft(); }));
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const close = event.submitter?.value === 'close';
+    const q = question.value.trim(), a = answer.value.trim();
+    question.setCustomValidity(q ? '' : 'Enter a question.'); answer.setCustomValidity(a ? '' : 'Enter an answer.');
+    let destination = activeUnit;
+    if (destination === '__new__') {
+      const name = topic.value.trim(); topic.setCustomValidity(name ? '' : 'Enter a topic name.');
+      if (name) destination = getUnits(activeSubject).find((item) => item.name.toLowerCase() === name.toLowerCase())?.name || name;
+    }
+    if (!form.reportValidity()) return;
+    if (getUnits(activeSubject).some((item) => item.name === destination) && getDeck(activeSubject, destination).some((card) => normaliseQuestion(card[0]) === normaliseQuestion(q))) {
+      status.textContent = 'This question is already in the topic. Change the question or choose another topic.'; question.focus(); return;
+    }
+    try {
+      if (!getUnits(activeSubject).some((item) => item.name === destination)) {
+        const topics = { ...customTopics, [activeSubject]: [...(customTopics[activeSubject] || []), { name: destination, cards: [] }] };
+        saveWorkspaceItem('revisie-topics', JSON.stringify(topics)); Object.assign(customTopics, topics);
+      }
+      persistFlashcards([{ subject: activeSubject, unit: destination, question: q, answer: a }]);
+    } catch { status.textContent = 'Could not save the card. Free some browser storage and try again. Your text is still here.'; return; }
+    added++; question.value = ''; answer.value = ''; topic.value = ''; saveDraft();
+    if (activeUnit !== destination) loadUnits(destination);
+    rememberDestination();
+    status.textContent = `Saved. ${added} ${added === 1 ? 'card' : 'cards'} added.`;
+    if (close) { closeModal(); notify(added === 1 ? 'Flashcard saved.' : `${added} flashcards saved.`); }
+    else question.focus();
+  });
+  form.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !event.isComposing) {
+      event.preventDefault(); form.requestSubmit(form.querySelector('[value="another"]'));
+    }
+  });
+  question.focus();
+}
+function addFlashcard() { openCardComposer(); }
+function addFlashcardFor(subjectKey, unitName) { openCardComposer(subjectKey, unitName); }
 function openCardManager(subjectKey, unitName) {
   const subject = subjectData[subjectKey];
   const starterCards = getStarterDeck(subjectKey, unitName).map((card, index) => ({ card, index }));
   const personalCards = userCards.map((card, index) => ({ ...card, index })).filter((card) => card.subject === subjectKey && card.unit === unitName);
-  const starterList = starterCards.map(({ card, index }) => `<div class="managed-card"><div><strong>${escapeHtml(card[0])}</strong><small>${escapeHtml(card[1])}</small></div><div><button data-edit-starter="${index}" aria-label="Edit flashcard">${icon('pencil')}</button></div></div>`).join('');
-  const personalList = personalCards.map((card) => `<div class="managed-card"><div><strong>${escapeHtml(card.question)}</strong><small>${escapeHtml(card.answer)}</small></div><div><button data-edit-card="${card.index}" aria-label="Edit flashcard">${icon('pencil')}</button><button data-delete-card="${card.index}" aria-label="Delete flashcard">${icon('trash-2')}</button></div></div>`).join('') || '<p class="empty-state">No personal cards in this topic yet.</p>';
+  const starterList = starterCards.map(({ card, index }) => `<div class="managed-card"><div><strong>${escapeHtml(card[0])}</strong><small>${escapeHtml(card[1])}</small></div>${itemActions(`Options for ${card[0]}`, itemAction('Edit flashcard', 'pencil', `data-edit-starter="${index}"`))}</div>`).join('');
+  const personalList = personalCards.map((card) => `<div class="managed-card"><div><strong>${escapeHtml(card.question)}</strong><small>${escapeHtml(card.answer)}</small></div>${itemActions(`Options for ${card.question}`, itemAction('Edit flashcard', 'pencil', `data-edit-card="${card.index}"`) + itemAction('Delete flashcard', 'trash-2', `data-delete-card="${card.index}"`, true))}</div>`).join('') || '<p class="empty-state">No personal cards in this topic yet.</p>';
   const options = getUnits(subjectKey).map((unit) => `<option ${unit.name === unitName ? 'selected' : ''}>${escapeHtml(unit.name)}</option>`).join('');
   const backdrop = openModal(`${subject.label} flashcards`, `<label class="upload-label" for="manageUnit">Topic</label><select id="manageUnit" class="note-subject">${options}</select><div class="managed-card-intro">Starter questions — edit any question or answer to personalise it.</div><div class="managed-cards">${starterList}</div><div class="managed-card-intro">Your flashcards</div><div class="managed-cards">${personalList}</div><div class="subject-actions"><button class="primary-button" id="addManagedCard">Add flashcard ${icon('plus')}</button><button class="secondary-button" id="shareManagedDeck">Share deck ${icon('share-2')}</button></div>`);
   backdrop.querySelector('#manageUnit').addEventListener('change', (event) => openCardManager(subjectKey, event.target.value));
@@ -703,7 +938,7 @@ async function hydrateNotePhotosOnce() {
 }
 
 function openNotes(subjectKey = currentSubject, noteId = null) {
-  const existing = noteId === null ? null : noteLibrary.find((note) => note.id === noteId); const subjectOptions = Object.entries(subjectData).map(([key, subject]) => `<option value="${key}" ${key === subjectKey ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`).join('');
+  const existing = noteId === null ? null : noteLibrary.find((note) => note.id === noteId); const subjectOptions = subjectEntries().map(([key, subject]) => `<option value="${key}" ${key === subjectKey ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`).join('');
   const backdrop = openModal(existing ? 'Edit note' : 'New note', `<form class="notes-form"><input id="noteTitle" class="note-title" required placeholder="Note title" value="${escapeHtml(existing?.title || '')}"><select id="noteSubject" class="note-subject">${subjectOptions}${customSubjects.map((subject) => `<option value="${subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${escapeHtml(subject.name)}</option>`).join('')}</select><textarea id="notesText" placeholder="Capture an idea, summary, or question...">${escapeHtml(existing?.body || localStorage.getItem('revisie-notes') || '')}</textarea><label class="upload-label" for="noteImage">Add a photo of handwritten notes</label><input id="noteImage" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><img id="notePreview" class="note-preview" alt="Uploaded note preview" ${existing?.image ? `src="${escapeHtml(existing.image)}"` : 'hidden'}><button class="ocr-button" type="button" id="ocrButton">Extract text from photo</button><button class="primary-button" type="submit">Save note ${icon('check')}</button></form>`);
   const image = backdrop.querySelector('#noteImage'); const preview = backdrop.querySelector('#notePreview'); let photoFile = null;
   if (existing && hasNotePhoto(existing)) void hydrateNotePhotos().then(() => { if (!photoFile && backdrop.isConnected) { const current = noteLibrary.find((note) => note.id === existing.id); if (current?.image) { preview.src = current.image; preview.hidden = false; } } });
@@ -738,7 +973,7 @@ function saveResourceMetadata() { saveWorkspaceItem('revisie-resources', JSON.st
 async function persistResourceFile(resource) { await resourceDatabaseRequest('readwrite', (store) => store.put({ id: resource.id, data: resource.data })); }
 async function removeResourceFile(resourceId) { await resourceDatabaseRequest('readwrite', (store) => store.delete(resourceId)); }
 async function prepareResourceLibrary() { try { let migrated = false; for (const resource of resourceLibrary) { if (resource.data) { await persistResourceFile(resource); migrated = true; } else { const stored = await resourceDatabaseRequest('readonly', (store) => store.get(resource.id)); if (stored?.data) resource.data = stored.data; } } if (migrated) saveResourceMetadata(); renderResources(); renderSubjectResources(); } catch (error) { console.warn('PDF storage could not be prepared.', error); } }
-function resourceSubjectOptions(selected = '') { const builtIn = Object.entries(subjectData).map(([key, subject]) => `<option value="${key}" ${key === selected ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`); const personal = customSubjects.filter((subject) => !subjectData[subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')]).map((subject) => { const key = subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'); return `<option value="${key}" ${key === selected ? 'selected' : ''}>${escapeHtml(subject.name)}</option>`; }); return [...builtIn, ...personal].join(''); }
+function resourceSubjectOptions(selected = '') { const builtIn = subjectEntries().map(([key, subject]) => `<option value="${key}" ${key === selected ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`); const personal = customSubjects.filter((subject) => !subjectData[subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')]).map((subject) => { const key = subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'); return `<option value="${key}" ${key === selected ? 'selected' : ''}>${escapeHtml(subject.name)}</option>`; }); return [...builtIn, ...personal].join(''); }
 function resourceSubjectLabel(subjectKey) { return subjectData[subjectKey]?.label || customSubjects.find((subject) => subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === subjectKey)?.name || subjectKey || 'Unassigned'; }
 function resourceFile(resource) { const [header, encoded] = String(resource.data || '').split(','); const mime = header.match(/data:([^;]+)/)?.[1] || 'application/pdf'; const binary = atob(encoded || ''); const bytes = new Uint8Array(binary.length); for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index); return new File([bytes], resource.name || 'revision-pdf.pdf', { type: mime }); }
 function resourceObjectUrl(resource) { return URL.createObjectURL(resourceFile(resource)); }
@@ -753,31 +988,279 @@ async function runOcr(backdrop) { const file = backdrop.querySelector('#noteImag
 function renderNoteSurfaces() { const noteArea = document.querySelector('.notes-library'); if (noteArea) { noteArea.innerHTML = noteLibrary.length ? noteLibrary.map((note) => `<article class="saved-note"><button class="saved-note-open" data-open-note="${note.id}" aria-label="Open ${escapeHtml(note.title)}"><div><span class="subject-label">${subjectData[note.subject]?.label || note.subject}</span><h3>${escapeHtml(note.title)}</h3><p>${escapeHtml(note.body.slice(0, 140))}${note.body.length > 140 ? '...' : ''}</p></div>${notePhotoMarkup(note)}</button><div class="saved-note-actions"><button data-edit-note="${note.id}" aria-label="Edit ${escapeHtml(note.title)}">${icon('pencil')}</button><button data-share-note="${note.id}" aria-label="Share ${escapeHtml(note.title)}">${icon('share-2')}</button><button data-delete-note="${note.id}" aria-label="Delete ${escapeHtml(note.title)}">${icon('trash-2')}</button></div></article>`).join('') : '<p class="empty-state">Your saved notes will appear here.</p>'; noteArea.querySelectorAll('[data-open-note]').forEach((button) => button.addEventListener('click', () => viewNote(Number(button.dataset.openNote)))); noteArea.querySelectorAll('[data-edit-note]').forEach((button) => button.addEventListener('click', () => openNotes(currentSubject, Number(button.dataset.editNote)))); noteArea.querySelectorAll('[data-share-note]').forEach((button) => button.addEventListener('click', () => shareNote(button.dataset.shareNote))); noteArea.querySelectorAll('[data-delete-note]').forEach((button) => button.addEventListener('click', async () => { const index = noteLibrary.findIndex((note) => note.id === Number(button.dataset.deleteNote)); if (index >= 0 && confirm('Delete this note?')) { noteLibrary.splice(index, 1); saveWorkspaceItem('revisie-note-library', JSON.stringify(noteLibrary)); await syncWorkspaceNow(); renderNoteSurfaces(); notify('Note deleted.'); } })); } const subjectNotes = document.querySelector('.subject-notes'); if (subjectNotes) { const notes = noteLibrary.filter((note) => note.subject === currentSubject); subjectNotes.innerHTML = notes.length ? notes.map((note) => `<button class="subject-note" data-open-note="${note.id}"><strong>${escapeHtml(note.title)}</strong><small>${escapeHtml(note.body.slice(0, 90))}${note.body.length > 90 ? '...' : ''}</small>${notePhotoMarkup(note)}</button>`).join('') : '<p class="empty-state">No notes for this subject yet.</p>'; subjectNotes.querySelectorAll('[data-open-note]').forEach((button) => button.addEventListener('click', () => viewNote(Number(button.dataset.openNote)))); } updateNotePhotoSlots(); }
 function setupNotesPage() { if (!location.pathname.endsWith('notes.html')) return; const wrap = document.querySelector('.page-wrap'); if (!wrap || document.querySelector('.notes-library')) return; wrap.insertAdjacentHTML('beforeend', '<section class="notes-section"><div class="section-heading"><div><p class="eyebrow">SAVED KNOWLEDGE</p><h2>All notes</h2></div></div><div class="notes-library"></div></section>'); renderNoteSurfaces(); }
 function plannerItems() { return JSON.parse(localStorage.getItem('revisie-planner-items') || '[]'); }
-function openPlanner() { const items = plannerItems(); const list = items.length ? items.map((item) => `<div class="planner-row ${item.done ? 'complete' : ''}"><input data-plan-done="${item.id}" type="checkbox" ${item.done ? 'checked' : ''}><label><strong>${item.title}</strong><small>${item.subject} · ${item.date || 'Today'} · ${item.minutes} min</small></label><button data-edit-plan="${item.id}" aria-label="Edit ${item.title}">${icon('pencil')}</button><button data-delete-plan="${item.id}" aria-label="Delete ${item.title}">${icon('trash-2')}</button></div>`).join('') : '<p class="empty-state">Your plan is empty. Add a session to decide what happens next.</p>'; const backdrop = openModal('Organise your revision', `<p class="hero-copy">Build a plan that fits your day. Sessions are saved in this browser.</p><div class="planner-list">${list}</div><button class="primary-button" id="addPlan">Add study session ${icon('plus')}</button>`); backdrop.querySelector('#addPlan').addEventListener('click', () => editPlan()); backdrop.querySelectorAll('[data-plan-done]').forEach((input) => input.addEventListener('change', () => { const item = items.find((entry) => entry.id === Number(input.dataset.planDone)); if (item) { item.done = input.checked; saveWorkspaceItem('revisie-planner-items', JSON.stringify(items)); openPlanner(); } })); backdrop.querySelectorAll('[data-edit-plan]').forEach((button) => button.addEventListener('click', () => editPlan(Number(button.dataset.editPlan)))); backdrop.querySelectorAll('[data-delete-plan]').forEach((button) => button.addEventListener('click', () => { if (confirm('Delete this study session?')) { saveWorkspaceItem('revisie-planner-items', JSON.stringify(items.filter((item) => item.id !== Number(button.dataset.deletePlan)))); openPlanner(); } })); }
-function editPlan(id = null) { const items = plannerItems(); const existing = items.find((item) => item.id === id); const backdrop = openModal(existing ? 'Edit study session' : 'Add study session', `<form class="notes-form"><input id="planTitle" class="note-title" required placeholder="Session title" value="${escapeHtml(existing?.title || '')}"><select id="planSubject" class="note-subject">${Object.entries(subjectData).map(([key, subject]) => `<option value="${key}" ${key === (existing?.subject || currentSubject) ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`).join('')}</select><label class="upload-label" for="planDate">Date</label><input id="planDate" class="note-title" type="date" value="${existing?.date || new Date().toISOString().slice(0, 10)}"><label class="upload-label" for="planStart">Start time</label><input id="planStart" class="note-title" type="time" value="${existing?.start || '16:00'}"><input id="planMinutes" class="note-title" type="number" min="5" max="300" step="5" value="${existing?.minutes || 25}" aria-label="Minutes"><button class="primary-button" type="submit">Save session ${icon('check')}</button></form>`); backdrop.querySelector('form').addEventListener('submit', (event) => { event.preventDefault(); const item = { id: existing?.id || Date.now(), title: backdrop.querySelector('#planTitle').value.trim(), subject: backdrop.querySelector('#planSubject').value, date: backdrop.querySelector('#planDate').value, start: backdrop.querySelector('#planStart').value || '16:00', minutes: Number(backdrop.querySelector('#planMinutes').value) || 25, done: existing?.done || false }; const index = items.findIndex((entry) => entry.id === item.id); if (index >= 0) items[index] = item; else items.push(item); saveWorkspaceItem('revisie-planner-items', JSON.stringify(items)); openPlanner(); }); }
-function streakState() { return JSON.parse(localStorage.getItem('revisie-streak') || '{"current":0,"lastDate":""}'); }
-function markStudyComplete() { if (!revisieAccount) return; const today = new Date().toISOString().slice(0, 10); const state = streakState(); if (state.lastDate === today) return; const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10); state.current = state.lastDate === yesterday ? state.current + 1 : 1; state.lastDate = today; saveWorkspaceItem('revisie-streak', JSON.stringify(state)); }
-function openStreak() { if (!revisieAccount) { location.href = 'account.html'; return; } const state = streakState(); const current = state.current || 0; openModal(`Your ${current} day streak`, `<div class="streak-modal-summary"><div class="streak-big">${current}</div><div><strong>consecutive study days</strong><small>Complete a review each day to keep it alive</small></div></div><div class="week-dots">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day) => `<div class="week-day">${day}<i>•</i></div>`).join('')}</div><div class="milestone"><strong>Next milestone: ${Math.max(3, current + 3)} days</strong><br>Only completed study sessions count. No XP, pressure, or fake progress.</div>`); }
-function setupSettingsPage() { if (!location.pathname.endsWith('settings.html')) return; const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}'); const name = document.getElementById('displayName'); const subject = document.getElementById('defaultSubject'); const minutes = document.getElementById('dailyMinutes'); const motion = document.getElementById('reduceMotion'); if (!name) return; name.value = settings.name || 'Sean'; subject.value = settings.subject || 'mathematics'; minutes.value = settings.minutes || 35; motion.checked = Boolean(settings.reduceMotion); document.getElementById('settingsForm').addEventListener('submit', (event) => { event.preventDefault(); saveWorkspaceItem('revisie-settings', JSON.stringify({ name: name.value.trim() || 'Sean', subject: subject.value, minutes: Number(minutes.value) || 35, reduceMotion: motion.checked })); document.documentElement.classList.toggle('reduce-motion', motion.checked); notify('Settings saved.'); }); document.getElementById('resetData').addEventListener('click', () => { if (!confirm('Reset your personal subjects, flashcards, notes, resources, and planner data?')) return; ['revisie-subjects', 'revisie-flashcards', 'revisie-note-library', 'revisie-notes', 'revisie-note-title', 'revisie-resources', 'revisie-plan'].forEach((key) => removeWorkspaceItem(key)); notify('Personal data reset. Built-in GCSE content is unchanged.'); }); if (settings.reduceMotion) document.documentElement.classList.add('reduce-motion'); }
-function assistantResponse(input) { const value = input.value.trim(); if (!value) return; const lower = value.toLowerCase(); const subject = subjectData[currentSubject] || subjectData.mathematics; const notes = noteLibrary.filter((note) => note.subject === currentSubject).map((note) => note.body).join(' '); const deck = getDeck(currentSubject, getUnits(currentSubject)[0].name); let answer = `For ${escapeHtml(subject.label)}, start with the key definition, then apply it to an unfamiliar example. Your current focus is ${subject.topic}.`; if (lower.includes('quiz') || lower.includes('test')) { const card = deck[Math.floor(Math.random() * deck.length)]; answer = `Quick quiz: ${escapeHtml(card[0])} Take a moment to answer from memory, then open the matching ${getUnits(currentSubject)[0].name} deck to check it.`; } else if (lower.includes('summar')) answer = notes ? `Here is the beginning of your saved ${escapeHtml(subject.label)} note: ${notes.slice(0, 260)}${notes.length > 260 ? '...' : ''}` : `You do not have a saved ${escapeHtml(subject.label)} note yet. Add one from the Notes page and I can use it here.`; else if (lower.includes('explain') || lower.includes('help')) { const card = deck[0]; answer = `${escapeHtml(card[0])} Answer: ${escapeHtml(card[1])} Next, try explaining that answer without looking.`; } const panel = document.querySelector('.assistant-panel'); if (panel) { panel.querySelector('.assistant-answer')?.remove(); panel.insertAdjacentHTML('beforeend', `<div class="assistant-answer"><strong>${escapeHtml(subject.label)} study assistant</strong><br>${answer}</div>`); } input.value = ''; }
-function addSubject() { const backdrop = openModal('Add a subject', `<form class="notes-form"><input id="newSubject" class="note-title" required placeholder="Subject name"><input id="newTopic" class="note-title" placeholder="First topic (optional)"><button class="primary-button" type="submit">Add subject ${icon('plus')}</button></form>`); backdrop.querySelector('form').addEventListener('submit', async (event) => { event.preventDefault(); const name = backdrop.querySelector('#newSubject').value.trim(); const topic = backdrop.querySelector('#newTopic').value.trim() || 'First topic'; if (!name) return; customSubjects.push({ name, topic }); saveWorkspaceItem('revisie-subjects', JSON.stringify(customSubjects)); await syncWorkspaceNow(); closeModal(); notify(`${name} added to your library.`); location.reload(); }); }
-function setupCustomSubjects() { if (!location.pathname.endsWith('subjects.html')) return; const intro = document.querySelector('.page-intro'); const grid = document.querySelector('.subject-grid'); if (!intro || !grid) return; if (!document.getElementById('addSubject')) { const button = document.createElement('button'); button.id = 'addSubject'; button.className = 'primary-button'; button.innerHTML = `Add subject ${icon('plus')}`; intro.appendChild(button); button.addEventListener('click', addSubject); } const entries = Object.entries(subjectData).filter(([key]) => key !== 'psychology'); const builtInCards = entries.map(([key, subject]) => { const route = ['mathematics', 'biology', 'history', 'psychology'].includes(key) ? `${key}.html` : `subject.html?name=${encodeURIComponent(subject.label)}`; return `<a class="subject-card" data-subject-card="${key}" data-category="${subject.category}" href="${route}"><div class="subject-top"><div class="subject-icon ${subject.color}">${icon(subject.icon)}</div><span class="progress-ring">HIGHER</span></div><strong>${escapeHtml(subject.label)}</strong><small>GCSE Higher · ${subject.board}</small><div class="bar"><span style="width:${key === 'biology' ? 72 : key === 'mathematics' ? 68 : 18}%"></span></div></a>`; }).join(''); const customCards = customSubjects.filter((subject) => !subjectData[subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')]).map((subject) => { const key = subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'); return `<a class="subject-card" data-subject-card="${key}" data-category="custom" href="subject.html?name=${encodeURIComponent(subject.name)}"><div class="subject-top"><div class="subject-icon blue">${icon('book-open')}</div><span class="progress-ring">HIGHER</span></div><strong>${subject.name}</strong><small>GCSE Higher · ${subject.topic}</small><div class="bar"><span style="width:8%"></span></div></a>`; }).join(''); grid.innerHTML = builtInCards + customCards; }
-function editSubject(subjectIndex) { const subject = customSubjects[subjectIndex]; if (!subject) return; const backdrop = openModal('Edit subject', `<form class="notes-form"><input id="editSubjectName" class="note-title" required value="${subject.name}"><input id="editSubjectTopic" class="note-title" value="${subject.topic}"><button class="primary-button" type="submit">Save changes ${icon('check')}</button></form>`); backdrop.querySelector('form').addEventListener('submit', async (event) => { event.preventDefault(); customSubjects[subjectIndex] = { name: backdrop.querySelector('#editSubjectName').value.trim(), topic: backdrop.querySelector('#editSubjectTopic').value.trim() || 'First topic' }; saveWorkspaceItem('revisie-subjects', JSON.stringify(customSubjects)); await syncWorkspaceNow(); closeModal(); location.reload(); }); }
-async function deleteSubject(subjectIndex) { const subject = customSubjects[subjectIndex]; if (!subject || !confirm(`Delete ${subject.name}?`)) return; customSubjects.splice(subjectIndex, 1); saveWorkspaceItem('revisie-subjects', JSON.stringify(customSubjects)); await syncWorkspaceNow(); notify(`${subject.name} deleted.`); location.reload(); }
-function setupCustomSubjectActions() { if (!location.pathname.endsWith('subjects.html')) return; customSubjects.forEach((subject, index) => { const key = subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'); const card = document.querySelector(`a[data-subject-card="${key}"][data-category="custom"]`); if (!card || card.parentElement.classList.contains('custom-subject-wrap')) return; const wrap = document.createElement('div'); wrap.className = 'custom-subject-wrap'; card.replaceWith(wrap); wrap.appendChild(card); wrap.insertAdjacentHTML('beforeend', `<div class="custom-subject-actions"><button data-edit-subject="${index}" aria-label="Edit ${subject.name}">${icon('pencil')}</button><button data-delete-subject="${index}" aria-label="Delete ${subject.name}">${icon('trash-2')}</button></div>`); }); document.querySelectorAll('[data-edit-subject]').forEach((button) => button.addEventListener('click', () => editSubject(Number(button.dataset.editSubject)))); document.querySelectorAll('[data-delete-subject]').forEach((button) => button.addEventListener('click', () => deleteSubject(Number(button.dataset.deleteSubject)))); }
-function setupSubjectFilters() { const filters = document.querySelector('.subject-filter'); if (!filters) return; const hasPersonalSubjects = customSubjects.some((subject) => !subjectData[subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')]); filters.innerHTML = `<button class="active" data-filter="all" aria-pressed="true">All subjects</button><button data-filter="core" aria-pressed="false">Core</button><button data-filter="science" aria-pressed="false">Science</button><button data-filter="language" aria-pressed="false">Languages</button><button data-filter="option" aria-pressed="false">Options</button>${hasPersonalSubjects ? '<button data-filter="custom" aria-pressed="false">Personal</button>' : ''}`; }
-function setupFlashcardLibrary() { if (!location.pathname.endsWith('flashcards.html')) return; const intro = document.querySelector('.page-intro'); const grid = document.querySelector('.subject-grid'); if (!intro || !grid) return; if (!document.getElementById('addFlashcard')) { const button = document.createElement('button'); button.id = 'addFlashcard'; button.className = 'primary-button'; button.innerHTML = `Make a flashcard ${icon('plus')}`; intro.appendChild(button); button.addEventListener('click', addFlashcard); } if (!document.getElementById('importFlashcards')) {
+function openPlanner() { const items = plannerItems(); const list = items.length ? items.map((item) => `<div class="planner-row ${item.done ? 'complete' : ''}"><input data-plan-done="${item.id}" type="checkbox" ${item.done ? 'checked' : ''}><label><strong>${item.title}</strong><small>${item.subject} · ${item.date || 'Today'} · ${item.minutes} min</small></label><button data-edit-plan="${item.id}" aria-label="Edit ${item.title}">${icon('pencil')}</button><button data-delete-plan="${item.id}" aria-label="Delete ${item.title}">${icon('trash-2')}</button></div>`).join('') : '<p class="empty-state">Your plan is empty. Add a session to decide what happens next.</p>'; const backdrop = openModal('Organise your revision', `<p class="hero-copy">Build a plan that fits your day. Sessions are saved in this browser.</p><div class="planner-list">${list}</div><button class="primary-button" id="addPlan">Add study session ${icon('plus')}</button>`); backdrop.querySelector('#addPlan').addEventListener('click', () => editPlan()); backdrop.querySelectorAll('[data-plan-done]').forEach((input) => input.addEventListener('change', () => { const item = items.find((entry) => entry.id === Number(input.dataset.planDone)); if (item) { item.done = input.checked; completePlannerStudy(item); saveWorkspaceItem('revisie-planner-items', JSON.stringify(items)); openPlanner(); } })); backdrop.querySelectorAll('[data-edit-plan]').forEach((button) => button.addEventListener('click', () => editPlan(Number(button.dataset.editPlan)))); backdrop.querySelectorAll('[data-delete-plan]').forEach((button) => button.addEventListener('click', () => { if (confirm('Delete this study session?')) { saveWorkspaceItem('revisie-planner-items', JSON.stringify(items.filter((item) => item.id !== Number(button.dataset.deletePlan)))); openPlanner(); } })); }
+function editPlan(id = null) { const items = plannerItems(); const existing = items.find((item) => item.id === id); const backdrop = openModal(existing ? 'Edit study session' : 'Add study session', `<form class="notes-form"><input id="planTitle" class="note-title" required placeholder="Session title" value="${escapeHtml(existing?.title || '')}"><select id="planSubject" class="note-subject">${subjectEntries().map(([key, subject]) => `<option value="${key}" ${key === (existing?.subject || currentSubject) ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`).join('')}</select><label class="upload-label" for="planDate">Date</label><input id="planDate" class="note-title" type="date" value="${existing?.date || studyDate()}"><label class="upload-label" for="planStart">Start time</label><input id="planStart" class="note-title" type="time" value="${existing?.start || '16:00'}"><input id="planMinutes" class="note-title" type="number" min="5" max="300" step="5" value="${existing?.minutes || 25}" aria-label="Minutes"><button class="primary-button" type="submit">Save session ${icon('check')}</button></form>`); backdrop.querySelector('form').addEventListener('submit', (event) => { event.preventDefault(); const item = { id: existing?.id || Date.now(), title: backdrop.querySelector('#planTitle').value.trim(), subject: backdrop.querySelector('#planSubject').value, date: backdrop.querySelector('#planDate').value, start: backdrop.querySelector('#planStart').value || '16:00', minutes: Number(backdrop.querySelector('#planMinutes').value) || 25, done: existing?.done || false }; const index = items.findIndex((entry) => entry.id === item.id); if (index >= 0) items[index] = item; else items.push(item); saveWorkspaceItem('revisie-planner-items', JSON.stringify(items)); openPlanner(); }); }
+function streakState(today = studyDate()) { return calculateStreak(localStorage.getItem('revisie-streak'), today); }
+function markStudyComplete() {
+  const today = studyDate();
+  const state = streakState(today);
+  if (state.completedToday) return false;
+  const days = [...new Set([...studyDays(localStorage.getItem('revisie-streak')), today])].sort();
+  saveWorkspaceItem('revisie-streak', JSON.stringify({ version: 2, days }));
+  refreshStreakSurfaces();
+  return true;
+}
+function completePlannerStudy(item) {
+  // Completing a past or future plan must not award a study day today.
+  if (item.done && (!item.date || item.date === studyDate())) markStudyComplete();
+}
+function streakMessage(state) {
+  if (state.completedToday) return 'Today is complete. Next study day: tomorrow.';
+  if (state.current) return 'Study today to keep your streak alive.';
+  return state.total ? 'Your last streak ended. Study today to start again.' : 'No study recorded yet. Review a card or complete a session to start.';
+}
+function streakMarkup(state = streakState()) {
+  const today = studyDate();
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+  const monday = shiftStudyDate(today, -(weekday + 6) % 7);
+  const days = new Set(state.days);
+  const milestone = [3, 7, 14, 30, 60, 100, 180, 365].find((day) => day > state.current) || (Math.floor(state.current / 100) + 1) * 100;
+  const weekLabel = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(`${monday}T12:00:00Z`));
+  return `<div class="streak-view"><div class="streak-heading"><div><h2>Your study streak</h2></div><span class="streak-status${state.completedToday ? ' is-complete' : ''}"><span aria-hidden="true"></span>${state.completedToday ? 'Today complete' : 'Not studied today'}</span></div><div class="streak-main"><div class="streak-summary"><div class="streak-count"><span class="streak-big">${state.current}</span><span>${state.current === 1 ? 'day' : 'days'}<small>in a row</small></span></div><p class="streak-message" role="status">${streakMessage(state)}</p></div><div class="streak-week"><div class="streak-week-heading"><span>This week</span><span>From ${weekLabel}</span></div><div class="week-dots" aria-label="Study activity this week">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, index) => {
+    const date = shiftStudyDate(monday, index); const done = days.has(date);
+    const status = done ? 'Studied' : date > today ? 'Upcoming' : 'No study recorded';
+    return `<div class="week-day${done ? ' done' : ''}${date === today ? ' today' : ''}${date > today ? ' upcoming' : ''}" aria-label="${label} ${date}: ${status}" ${date === today ? 'aria-current="date"' : ''}><span>${label}</span><i aria-hidden="true">${done ? '✓' : Number(date.slice(-2))}</i></div>`;
+  }).join('')}</div><p class="streak-week-note">${[...days].filter((day) => day >= monday && day <= shiftStudyDate(monday, 6)).length} of 7 study days</p></div></div><div class="streak-footer"><div class="streak-records"><span>Best streak<strong>${state.best} ${state.best === 1 ? 'day' : 'days'}</strong></span><span>Study days<strong>${state.total}</strong></span></div><div class="milestone"><div class="streak-milestone-label"><strong>Next milestone: ${milestone} days</strong><span>${state.current} / ${milestone}</span></div><progress class="streak-progress" max="${milestone}" value="${state.current}" aria-label="Progress to ${milestone} day streak"></progress><p>${milestone - state.current} more ${milestone - state.current === 1 ? 'day' : 'days'}. to reach this milestone.</p></div></div><details class="streak-details"><summary>How streaks work</summary><p>A flashcard review or a planner session completed today earns one study day. Days follow your local calendar. Missing a full day resets your current streak; your best stays saved.</p><p>${localStorage.getItem('revisie-account') ? 'Saved with your workspace.' : 'Saved in this browser. Sign in to sync across devices.'}</p></details></div>`;
+}
+function openStreak() {
+  const backdrop = openModal('Your study streak', streakMarkup());
+  backdrop.dataset.streakModal = 'true';
+}
+function refreshStreakSurfaces() {
+  const state = streakState();
+  const button = document.querySelector('.streak-button');
+  if (button) {
+    button.querySelector('strong').textContent = `${state.current} day streak`;
+    button.querySelector('small').textContent = state.completedToday ? 'Today complete' : 'Study today to build your streak';
+    button.querySelector('span')?.remove(); button.onclick = openStreak;
+  }
+  if (location.pathname.endsWith('index.html') || location.pathname === '/' || location.pathname.endsWith('progress.html')) {
+    const wrap = document.querySelector('.page-wrap');
+    if (wrap && !wrap.querySelector('.streak-panel')) {
+      const panel = document.createElement('section'); panel.className = 'streak-panel'; panel.setAttribute('aria-label', 'Your study streak');
+      const intro = wrap.querySelector('.page-intro, .overview-intro'); if (intro) intro.after(panel); else wrap.appendChild(panel);
+    }
+  }
+  const renderKey = JSON.stringify([studyDate(), state.days, Boolean(localStorage.getItem('revisie-account'))]);
+  const surfaces = [...document.querySelectorAll('.streak-panel, [data-streak-modal="true"] .modal-body')];
+  surfaces.forEach((surface) => {
+    if (surface.dataset.streakRender === renderKey) return;
+    const detailsOpen = Boolean(surface.querySelector('.streak-details')?.open);
+    surface.innerHTML = streakMarkup(state);
+    surface.dataset.streakRender = renderKey;
+    surface.querySelector('.streak-details').open = detailsOpen;
+  });
+  setupProgressRoute();
+}
+function profilePhoto(value) { return typeof value === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value) ? value : ''; }
+function renderProfile() {
+  const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+  const account = JSON.parse(localStorage.getItem('revisie-account') || 'null');
+  const name = settings.name || account?.name || 'Guest';
+  const photo = profilePhoto(settings.profilePhoto);
+  document.querySelectorAll('.avatar').forEach((avatar) => {
+    avatar.textContent = name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+    if (photo) { const image = document.createElement('img'); image.src = photo; image.alt = `${name}'s profile picture`; avatar.replaceChildren(image); }
+  });
+  const greeting = document.getElementById('overviewGreeting');
+  if (greeting && name !== 'Guest') greeting.innerHTML = `Good morning, <em>${escapeHtml(name)}.</em>`;
+  const workspace = document.querySelector('.workspace-switcher strong');
+  if (workspace) workspace.textContent = name === 'Guest' ? 'Guest workspace' : name;
+}
+async function prepareProfilePhoto(file) {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Choose a JPG, PNG or WebP image.');
+  if (file.size > 10 * 1024 * 1024) throw new Error('Choose an image smaller than 10 MB.');
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = () => reject(new Error('This image could not be opened. Try another file.')); image.src = url; });
+    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+    const context = canvas.getContext('2d'); if (!context) throw new Error('This browser could not prepare the image.');
+    const side = Math.min(image.naturalWidth, image.naturalHeight);
+    context.fillStyle = '#f6f7f2'; context.fillRect(0, 0, 256, 256);
+    context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+    const photo = canvas.toDataURL('image/jpeg', 0.85);
+    if (!profilePhoto(photo)) throw new Error('This browser could not prepare the image.');
+    return photo;
+  } finally { URL.revokeObjectURL(url); }
+}
+function setupSettingsPage() {
+  if (!location.pathname.endsWith('settings.html')) return;
+  const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+  const name = document.getElementById('displayName'); if (!name) return;
+  const subject = document.getElementById('defaultSubject'); const minutes = document.getElementById('dailyMinutes'); const motion = document.getElementById('reduceMotion');
+  name.value = settings.name || JSON.parse(localStorage.getItem('revisie-account') || 'null')?.name || '';
+  subject.innerHTML = subjectEntries().map(([key, item]) => `<option value="${key}">${escapeHtml(item.label)}</option>`).join('');
+  subject.value = subjectEntries().some(([key]) => key === settings.subject) ? settings.subject : subjectEntries()[0]?.[0] || ''; subject.disabled = !subjectEntries().length; minutes.value = settings.minutes || 35; motion.checked = Boolean(settings.reduceMotion);
+  const form = document.getElementById('settingsForm'); const save = form.querySelector('[type="submit"]');
+  let stagedPhoto = profilePhoto(settings.profilePhoto), photoVersion = 0;
+  const input = document.getElementById('profilePhoto'); const preview = document.getElementById('profilePhotoPreview'); const remove = document.getElementById('removeProfilePhoto'); const status = document.getElementById('profilePhotoStatus');
+  const updatePreview = () => {
+    preview.textContent = (name.value.trim() || 'You').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+    if (stagedPhoto) { const image = document.createElement('img'); image.src = stagedPhoto; image.alt = 'Profile picture preview'; preview.replaceChildren(image); }
+    remove.hidden = !stagedPhoto;
+  };
+  updatePreview(); name.addEventListener('input', updatePreview);
+  input.addEventListener('change', async () => {
+    const file = input.files[0]; if (!file) return;
+    const version = ++photoVersion; save.disabled = true; status.textContent = 'Preparing photo…';
+    try { const photo = await prepareProfilePhoto(file); if (version !== photoVersion) return; stagedPhoto = photo; updatePreview(); status.textContent = 'Photo ready. Save settings to apply it.'; }
+    catch (error) { if (version === photoVersion) status.textContent = error.message; }
+    finally { if (version === photoVersion) { save.disabled = false; input.value = ''; } }
+  });
+  remove.addEventListener('click', () => { photoVersion++; stagedPhoto = ''; save.disabled = false; input.value = ''; updatePreview(); status.textContent = 'Photo removed. Save settings to apply it.'; });
+  form.addEventListener('submit', (event) => {
+    event.preventDefault(); if (save.disabled) return;
+    try {
+      const current = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+      saveWorkspaceItem('revisie-settings', JSON.stringify({ ...current, name: name.value.trim(), subject: subject.value, minutes: Number(minutes.value) || 35, reduceMotion: motion.checked, profilePhoto: stagedPhoto }));
+      document.documentElement.classList.toggle('reduce-motion', motion.checked); renderProfile(); status.textContent = ''; notify('Settings saved.');
+    } catch { notify('Could not save settings. Free some browser storage and try again.'); }
+  });
+  document.getElementById('resetData').addEventListener('click', () => {
+    if (!confirm('Reset your personal subjects, flashcards, notes, resources, and planner data?')) return;
+    ['revisie-subjects', 'revisie-flashcards', 'revisie-note-library', 'revisie-notes', 'revisie-note-title', 'revisie-resources', 'revisie-plan', 'revisie-flashcard-drafts', 'revisie-card-destination'].forEach((key) => removeWorkspaceItem(key));
+    notify('Personal data reset. Built-in GCSE content is unchanged.');
+  });
+  if (settings.reduceMotion) document.documentElement.classList.add('reduce-motion');
+}
+function assistantResponse(input) { const value = input.value.trim(); if (!value) return; const lower = value.toLowerCase(); const subject = subjectData[currentSubject] || subjectData.mathematics; const notes = noteLibrary.filter((note) => note.subject === currentSubject).map((note) => note.body).join(' '); const deck = getDeck(currentSubject, getUnits(currentSubject)[0]?.name || ''); let answer = `For ${escapeHtml(subject.label)}, start with the key definition, then apply it to an unfamiliar example. Your current focus is ${subject.topic}.`; if (lower.includes('quiz') || lower.includes('test')) { const card = deck[Math.floor(Math.random() * deck.length)]; answer = `Quick quiz: ${escapeHtml(card[0])} Take a moment to answer from memory, then open the matching ${getUnits(currentSubject)[0]?.name || ''} deck to check it.`; } else if (lower.includes('summar')) answer = notes ? `Here is the beginning of your saved ${escapeHtml(subject.label)} note: ${notes.slice(0, 260)}${notes.length > 260 ? '...' : ''}` : `You do not have a saved ${escapeHtml(subject.label)} note yet. Add one from the Notes page and I can use it here.`; else if (lower.includes('explain') || lower.includes('help')) { const card = deck[0]; answer = `${escapeHtml(card[0])} Answer: ${escapeHtml(card[1])} Next, try explaining that answer without looking.`; } const panel = document.querySelector('.assistant-panel'); if (panel) { panel.querySelector('.assistant-answer')?.remove(); panel.insertAdjacentHTML('beforeend', `<div class="assistant-answer"><strong>${escapeHtml(subject.label)} study assistant</strong><br>${answer}</div>`); } input.value = ''; }
+function addSubject() {
+  const backdrop = openModal('Add a subject', `<form class="notes-form"><label class="upload-label" for="newSubject">Subject name</label><input id="newSubject" class="note-title" required placeholder="e.g. Economics"><label class="upload-label" for="newTopic">First topic</label><input id="newTopic" class="note-title" placeholder="Optional">${subjectAppearanceFields()}<button class="primary-button" type="submit">Add subject</button></form>`);
+  const form = backdrop.querySelector('form'); bindSubjectAppearance(form);
+  const nameInput = backdrop.querySelector('#newSubject'); nameInput.addEventListener('input', () => nameInput.setCustomValidity(''));
+  form.addEventListener('submit', (event) => {
+    event.preventDefault(); const name = nameInput.value.trim(); const key = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    if (!key || subjectData[key] && !subjectData[key].deleted) { nameInput.setCustomValidity(key ? 'This subject already exists.' : 'Use a subject name containing letters or numbers.'); nameInput.reportValidity(); return; }
+    const next = [...customSubjects, { name, topic: backdrop.querySelector('#newTopic').value.trim() || 'First topic', ...selectedSubjectStyle(form) }];
+    if (subjectData[key]?.deleted) {
+      const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+      settings.deletedSubjects = (settings.deletedSubjects || []).filter((id) => id !== key);
+      settings.subjectAppearance = { ...settings.subjectAppearance, [key]: selectedSubjectStyle(form) };
+      saveWorkspaceItem('revisie-settings', JSON.stringify(settings));
+    }
+    try { saveWorkspaceItem('revisie-subjects', JSON.stringify(next)); }
+    catch { notify('Could not save the subject. Free some browser storage and try again.'); return; }
+    customSubjects.splice(0, customSubjects.length, ...next); registerCustomSubjects(); closeModal(); refreshSubjectAppearance(); updateNavigationCounts(); notify('Subject added.');
+  });
+}
+function setupCustomSubjects() { if (!location.pathname.endsWith('subjects.html')) return; const intro = document.querySelector('.page-intro'); const grid = document.querySelector('.subject-grid'); if (!intro || !grid) return; if (!document.getElementById('addSubject')) { const button = document.createElement('button'); button.id = 'addSubject'; button.className = 'primary-button'; button.innerHTML = `Add subject ${icon('plus')}`; intro.appendChild(button); button.addEventListener('click', addSubject); } const entries = subjectEntries().filter(([key]) => key !== 'psychology'); const builtInCards = entries.map(([key, subject]) => { const route = ['mathematics', 'biology', 'history', 'psychology'].includes(key) ? `${key}.html` : `subject.html?name=${encodeURIComponent(subject.label)}`; return `<a class="subject-card" data-subject-card="${key}" data-category="${subject.category}" href="${route}"><div class="subject-top"><div class="subject-icon ${subject.color}">${subjectSymbol(subject)}</div><span class="progress-ring">HIGHER</span></div><strong>${escapeHtml(subject.label)}</strong><small>GCSE Higher · ${escapeHtml(subject.board)}</small><div class="bar"><span style="width:${key === 'biology' ? 72 : key === 'mathematics' ? 68 : 18}%"></span></div></a>`; }).join(''); const customCards = customSubjects.filter((subject) => !subjectData[subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')]).map((subject) => { const key = subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'); return `<a class="subject-card" data-subject-card="${key}" data-category="custom" href="subject.html?name=${encodeURIComponent(subject.name)}"><div class="subject-top"><div class="subject-icon blue">${icon('book-open')}</div><span class="progress-ring">HIGHER</span></div><strong>${subject.name}</strong><small>GCSE Higher · ${subject.topic}</small><div class="bar"><span style="width:8%"></span></div></a>`; }).join(''); grid.innerHTML = builtInCards + customCards; }
+function editSubject(subjectIndex) { const subject = customSubjects[subjectIndex]; if (!subject) return; const backdrop = openModal('Edit subject', `<form class="notes-form"><input id="editSubjectName" class="note-title" required value="${escapeHtml(subject.name)}"><input id="editSubjectTopic" class="note-title" value="${escapeHtml(subject.topic)}">${subjectAppearanceFields(subjectData[subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')] || subject)}<button class="primary-button" type="submit">Save changes ${icon('check')}</button></form>`); bindSubjectAppearance(backdrop.querySelector('form')); backdrop.querySelector('form').addEventListener('submit', async (event) => { event.preventDefault(); customSubjects[subjectIndex] = { name: backdrop.querySelector('#editSubjectName').value.trim(), topic: backdrop.querySelector('#editSubjectTopic').value.trim() || 'First topic', ...selectedSubjectStyle(backdrop.querySelector('form')) }; const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}'); if (settings.subjectAppearance) { delete settings.subjectAppearance[subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')]; saveWorkspaceItem('revisie-settings', JSON.stringify(settings)); } saveWorkspaceItem('revisie-subjects', JSON.stringify(customSubjects)); await syncWorkspaceNow(); closeModal(); location.reload(); }); }
+function deleteSubject(subjectKey) {
+  const key = typeof subjectKey === 'number' ? customSubjects[subjectKey]?.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : subjectKey;
+  const subject = subjectData[key]; if (!subject || !confirm(`Delete ${subject.label} and all its flashcards? Your notes and files will stay saved.`)) return;
+  const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+  if (builtInSubjectKeys.has(key)) settings.deletedSubjects = [...new Set([...(settings.deletedSubjects || []), key])];
+  const remainingSubjects = customSubjects.filter((item) => item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') !== key);
+  const remainingCards = userCards.filter((card) => card.subject !== key);
+  const topics = { ...customTopics }; delete topics[key];
+  saveWorkspaceItem('revisie-settings', JSON.stringify(settings));
+  saveWorkspaceItem('revisie-subjects', JSON.stringify(remainingSubjects)); saveWorkspaceItem('revisie-flashcards', JSON.stringify(remainingCards)); saveWorkspaceItem('revisie-topics', JSON.stringify(topics));
+  customSubjects.splice(0, customSubjects.length, ...remainingSubjects); userCards.splice(0, userCards.length, ...remainingCards); delete customTopics[key];
+  clearDeletedDeckMetadata(key);
+  registerCustomSubjects(); refreshSubjectAppearance(); updateNavigationCounts(); notify('Subject deleted.');
+}
+function clearDeletedDeckMetadata(subjectKey, topicName = null) {
+  for (const key of ['revisie-topic-progress', 'revisie-starter-card-overrides', 'revisie-subject-progress', 'revisie-due']) {
+    const values = JSON.parse(localStorage.getItem(key) || '{}');
+    Object.keys(values).forEach((id) => {
+      if (topicName === null ? id === subjectKey || id.startsWith(`${subjectKey}::`) : id === `${subjectKey}::${topicName}` || id.startsWith(`${subjectKey}::${topicName}::`)) delete values[id];
+    });
+    saveWorkspaceItem(key, JSON.stringify(values));
+    if (key === 'revisie-starter-card-overrides') { Object.keys(starterCardOverrides).forEach((id) => delete starterCardOverrides[id]); Object.assign(starterCardOverrides, values); }
+  }
+  const drafts = readCardDrafts();
+  Object.keys(drafts).forEach((id) => { try { const [subject, topic] = JSON.parse(id); if (subject === subjectKey && (topicName === null || topicName === topic)) delete drafts[id]; } catch { /* Ignore old malformed draft keys. */ } });
+  saveWorkspaceItem('revisie-flashcard-drafts', JSON.stringify(drafts));
+}
+function setupCustomSubjectActions() {
+  if (!location.pathname.endsWith('subjects.html')) return;
+  customSubjects.forEach((subject) => {
+    const key = subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const card = document.querySelector(`a[data-subject-card="${key}"][data-category="custom"]`);
+    if (!card || card.parentElement.classList.contains('custom-subject-wrap')) return;
+    const wrap = document.createElement('div'); wrap.className = 'custom-subject-wrap'; card.replaceWith(wrap); wrap.appendChild(card);
+  });
+}
+function setupSubjectFilters() { const filters = document.querySelector('.subject-filter'); if (!filters) return; const hasPersonalSubjects = customSubjects.some((subject) => !subjectData[subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')]); filters.innerHTML = `<button class="active" data-filter="all" aria-pressed="true">All subjects</button><button data-filter="core" aria-pressed="false">Core</button><button data-filter="science" aria-pressed="false">Science</button><button data-filter="language" aria-pressed="false">Languages</button><button data-filter="option" aria-pressed="false">Options</button>${hasPersonalSubjects ? '<button data-filter="custom" aria-pressed="false">Personal</button>' : ''}`; enhanceSubjectFilters(); }
+function topicActions(subjectKey, unit) {
+  const subjectAttribute = `data-topic-subject="${escapeHtml(subjectKey)}"`;
+  const edit = itemAction('Edit topic', 'pencil', `${subjectAttribute} data-edit-topic="${escapeHtml(unit.name)}"`);
+  return `<div class="topic-actions">${itemActions(`Options for ${unit.name}`, edit + itemAction('Delete topic', 'trash-2', `${subjectAttribute} data-delete-topic="${escapeHtml(unit.name)}"`, true))}</div>`;
+}
+function bindTopicActions(grid) {
+  grid.querySelectorAll('[data-edit-topic]').forEach((button) => button.addEventListener('click', (event) => {
+    event.preventDefault(); event.stopPropagation(); editTopic(button.dataset.topicSubject, button.dataset.editTopic);
+  }));
+  grid.querySelectorAll('[data-delete-topic]').forEach((button) => button.addEventListener('click', (event) => {
+    event.preventDefault(); event.stopPropagation(); deleteTopic(button.dataset.topicSubject, button.dataset.deleteTopic);
+  }));
+}
+function setupFlashcardLibrary() { if (!location.pathname.endsWith('flashcards.html')) return; const intro = document.querySelector('.page-intro'); const grid = document.querySelector('.subject-grid'); if (!intro || !grid) return; if (!document.getElementById('addFlashcard')) { const button = document.createElement('button'); button.id = 'addFlashcard'; button.className = 'primary-button'; button.innerHTML = `Add flashcards ${icon('plus')}`; intro.appendChild(button); button.addEventListener('click', addFlashcard); } if (!document.getElementById('importFlashcards')) {
   const actions = document.createElement('div'); actions.className = 'subject-actions';
   actions.innerHTML = `<button class="secondary-button" id="importFlashcards">Import flashcards ${icon('upload')}</button><button class="secondary-button" id="exportFlashcards">Back up my cards ${icon('download')}</button>`;
   intro.appendChild(actions);
   actions.querySelector('#importFlashcards').addEventListener('click', () => openFlashcardImport());
   actions.querySelector('#exportFlashcards').addEventListener('click', () => { if (!userCards.length) { notify('Create or import some cards first.'); return; } downloadFlashcards(userCards); });
   intro.querySelector('.hero-copy').textContent = 'Create cards or import a whole deck from Quizlet, a spreadsheet, or an AI assistant. Cards save on this device and sync when signed in.';
-} grid.innerHTML = Object.entries(subjectData).filter(([key]) => key !== 'psychology').flatMap(([key, subject]) => getUnits(key).map((unit) => `<button class="subject-card" data-action="unit-review" data-subject="${key}" data-unit="${escapeHtml(unit.name)}"><div class="subject-top"><div class="subject-icon ${subject.color}">${icon(subject.icon)}</div><span class="progress-ring">${getDeck(key, unit.name).length} CARDS</span></div><strong>${escapeHtml(subject.label)}</strong><small>GCSE Higher · ${escapeHtml(unit.name)}</small><div class="bar"><span style="width:18%"></span></div></button>`)).join(''); }
-function setupSubjectUnits() { if (location.pathname.endsWith('subjects.html') || location.pathname.endsWith('flashcards.html') || location.pathname.endsWith('index.html')) return; const grid = document.querySelector('.subject-grid'); const intro = document.querySelector('.page-intro'); const subject = subjectData[currentSubject]; if (!grid || !subject) return; if (intro && !document.getElementById('subjectAddCard')) { intro.insertAdjacentHTML('beforeend', `<div class="subject-actions"><button class="primary-button" id="subjectAddCard">Make a flashcard ${icon('plus')}</button><button class="secondary-button" id="subjectImportCards">Import flashcards ${icon('upload')}</button><button class="secondary-button" id="subjectManageCards">Manage flashcards ${icon('settings-2')}</button><button class="secondary-button" id="subjectAddTopic">Add topic ${icon('plus')}</button><button class="secondary-button" id="shareSubject">Share subject ${icon('share-2')}</button></div>`); intro.querySelector('#subjectAddCard').addEventListener('click', () => addFlashcardFor(currentSubject, getUnits(currentSubject)[0].name)); intro.querySelector('#subjectImportCards').addEventListener('click', () => openFlashcardImport(currentSubject)); intro.querySelector('#subjectManageCards').addEventListener('click', () => openCardManager(currentSubject, getUnits(currentSubject)[0].name)); intro.querySelector('#subjectAddTopic').addEventListener('click', () => addTopic(currentSubject)); intro.querySelector('#shareSubject').addEventListener('click', () => shareSubject(currentSubject)); } grid.innerHTML = getUnits(currentSubject).map((unit, index) => `<div class="topic-card-wrap"><button class="subject-card" data-action="unit-review" data-subject="${currentSubject}" data-unit="${escapeHtml(unit.name)}"><div class="subject-top"><div class="subject-icon ${subject.color || 'blue'}">${icon(subject.icon || 'book-open')}</div><span class="progress-ring">${getDeck(currentSubject, unit.name).length} CARDS</span></div><strong>${escapeHtml(unit.name)}</strong><small>GCSE Higher · active recall deck</small><div class="bar"><span style="width:18%"></span></div></button>${unit.custom ? `<div class="topic-actions"><button type="button" data-edit-topic="${(customTopics[currentSubject] || []).findIndex((topic) => topic.name === unit.name)}" aria-label="Edit ${escapeHtml(unit.name)}">${icon('pencil')}</button><button type="button" data-delete-topic="${(customTopics[currentSubject] || []).findIndex((topic) => topic.name === unit.name)}" aria-label="Delete ${escapeHtml(unit.name)}">${icon('trash-2')}</button></div>` : ''}</div>`).join(''); grid.querySelectorAll('[data-edit-topic]').forEach((button) => button.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); editTopic(currentSubject, Number(button.dataset.editTopic)); })); grid.querySelectorAll('[data-delete-topic]').forEach((button) => button.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); deleteTopic(currentSubject, Number(button.dataset.deleteTopic)); })); }
+} grid.innerHTML = subjectEntries().filter(([key]) => key !== 'psychology').flatMap(([key, subject]) => getUnits(key).map((unit) => `<div class="topic-card-wrap"><button class="subject-card" data-action="unit-review" data-subject="${key}" data-unit="${escapeHtml(unit.name)}"><div class="subject-top"><div class="subject-icon ${subject.color}">${subjectSymbol(subject)}</div><span class="progress-ring">${getDeck(key, unit.name).length} CARDS</span></div><strong>${escapeHtml(subject.label)}</strong><small>GCSE Higher · ${escapeHtml(unit.name)}</small><div class="bar"><span style="width:18%"></span></div></button>${topicActions(key, unit)}</div>`)).join('') || '<p class="empty-state">No topics yet. Add a subject or create a flashcard to get started.</p>'; bindTopicActions(grid); }
+function setupSubjectUnits() { if (location.pathname.endsWith('subjects.html') || location.pathname.endsWith('flashcards.html') || location.pathname.endsWith('index.html')) return; const grid = document.querySelector('.subject-grid'); const intro = document.querySelector('.page-intro'); const subject = subjectData[currentSubject]; if (!grid || !subject || subject.deleted) return; if (intro && !document.getElementById('subjectAddCard')) { intro.insertAdjacentHTML('beforeend', `<div class="subject-actions"><button class="primary-button" id="subjectAddCard">Add flashcards ${icon('plus')}</button><button class="secondary-button" id="subjectImportCards">Import flashcards ${icon('upload')}</button><button class="secondary-button" id="subjectManageCards">Manage flashcards ${icon('settings-2')}</button><button class="secondary-button" id="subjectAddTopic">Add topic ${icon('plus')}</button><button class="secondary-button" id="shareSubject">Share subject ${icon('share-2')}</button></div>`); intro.querySelector('#subjectAddCard').addEventListener('click', () => addFlashcardFor(currentSubject)); intro.querySelector('#subjectImportCards').addEventListener('click', () => openFlashcardImport(currentSubject)); intro.querySelector('#subjectManageCards').addEventListener('click', () => openCardManager(currentSubject, getUnits(currentSubject)[0]?.name || '')); intro.querySelector('#subjectAddTopic').addEventListener('click', () => addTopic(currentSubject)); intro.querySelector('#shareSubject').addEventListener('click', () => shareSubject(currentSubject)); } grid.innerHTML = getUnits(currentSubject).length ? getUnits(currentSubject).map((unit, index) => `<div class="topic-card-wrap"><button class="subject-card" data-action="unit-review" data-subject="${currentSubject}" data-unit="${escapeHtml(unit.name)}"><div class="subject-top"><div class="subject-icon ${subject.color || 'blue'}">${subjectSymbol(subject)}</div><span class="progress-ring">${getDeck(currentSubject, unit.name).length} CARDS</span></div><strong>${escapeHtml(unit.name)}</strong><small>GCSE Higher · active recall deck</small><div class="bar"><span style="width:18%"></span></div></button>${topicActions(currentSubject, unit)}</div>`).join('') : '<p class="empty-state">No topics yet. Add a topic or create a flashcard to get started.</p>'; bindTopicActions(grid); }
 function addTopic(subjectKey) { const subject = subjectData[subjectKey]; const backdrop = openModal(`Add ${escapeHtml(subject.label)} topic`, `<form class="notes-form"><input id="topicName" class="note-title" required placeholder="Topic or unit name"><button class="primary-button" type="submit">Add topic ${icon('plus')}</button></form>`); backdrop.querySelector('form').addEventListener('submit', async (event) => { event.preventDefault(); const name = backdrop.querySelector('#topicName').value.trim(); if (!name) return; customTopics[subjectKey] = customTopics[subjectKey] || []; if (getUnits(subjectKey).some((unit) => unit.name.toLowerCase() === name.toLowerCase())) { notify('That topic already exists.'); return; } const button = backdrop.querySelector('[type="submit"]'); button.disabled = true; button.textContent = 'Saving…'; customTopics[subjectKey].push({ name }); saveWorkspaceItem('revisie-topics', JSON.stringify(customTopics)); await syncWorkspaceNow(); closeModal(); setupSubjectUnits(); notify('Topic added with three starter flashcards.'); }); }
-function editTopic(subjectKey, topicIndex) { const topic = customTopics[subjectKey]?.[topicIndex]; if (!topic) return; const backdrop = openModal('Edit topic', `<form class="notes-form"><input id="topicName" class="note-title" required value="${topic.name}"><button class="primary-button" type="submit">Save topic ${icon('check')}</button></form>`); backdrop.querySelector('form').addEventListener('submit', (event) => { event.preventDefault(); const oldName = topic.name; topic.name = backdrop.querySelector('#topicName').value.trim(); userCards.filter((card) => card.subject === subjectKey && card.unit === oldName).forEach((card) => { card.unit = topic.name; }); customTopics[subjectKey].splice(topicIndex, 1, topic); saveWorkspaceItem('revisie-topics', JSON.stringify(customTopics)); saveWorkspaceItem('revisie-flashcards', JSON.stringify(userCards)); closeModal(); setupSubjectUnits(); notify('Topic updated.'); }); }
-function deleteTopic(subjectKey, topicIndex) { const topic = customTopics[subjectKey]?.[topicIndex]; if (!topic || !confirm(`Delete ${topic.name} and its personal cards?`)) return; customTopics[subjectKey].splice(topicIndex, 1); for (let index = userCards.length - 1; index >= 0; index -= 1) if (userCards[index].subject === subjectKey && userCards[index].unit === topic.name) userCards.splice(index, 1); saveWorkspaceItem('revisie-topics', JSON.stringify(customTopics)); saveWorkspaceItem('revisie-flashcards', JSON.stringify(userCards)); setupSubjectUnits(); notify('Topic deleted.'); }
+function editTopic(subjectKey, topicName) {
+  const oldName = typeof topicName === 'number' ? customTopics[subjectKey]?.[topicName]?.name : topicName;
+  const unit = getUnits(subjectKey).find((topic) => topic.name === oldName); if (!unit) return;
+  const backdrop = openModal('Edit topic', `<form class="notes-form"><label class="upload-label" for="topicName">Topic name</label><input id="topicName" class="note-title" required maxlength="120" value="${escapeHtml(oldName)}"><button class="primary-button" type="submit">Save topic ${icon('check')}</button></form>`);
+  const input = backdrop.querySelector('#topicName'); input.addEventListener('input', () => input.setCustomValidity(''));
+  backdrop.querySelector('form').addEventListener('submit', (event) => {
+    event.preventDefault(); const name = input.value.trim();
+    if (!name || getUnits(subjectKey).some((topic) => topic.name !== oldName && topic.name.toLowerCase() === name.toLowerCase())) {
+      input.setCustomValidity(name ? 'That topic already exists.' : 'Enter a topic name.'); input.reportValidity(); return;
+    }
+    if (name !== oldName) {
+      const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+      if (unit.sourceName) {
+        settings.topicNames = { ...settings.topicNames, [subjectKey]: { ...settings.topicNames?.[subjectKey], [unit.sourceName]: name } };
+        saveWorkspaceItem('revisie-settings', JSON.stringify(settings));
+      } else {
+        const topic = (customTopics[subjectKey] || []).find((topic) => topic.name === oldName);
+        if (topic) { topic.cards = unit.cards; topic.name = name; }
+        else customTopics[subjectKey] = [...(customTopics[subjectKey] || []), { name, cards: unit.cards }];
+        saveWorkspaceItem('revisie-topics', JSON.stringify(customTopics));
+      }
+      userCards.filter((card) => card.subject === subjectKey && card.unit === oldName).forEach((card) => { card.unit = name; });
+      saveWorkspaceItem('revisie-flashcards', JSON.stringify(userCards));
+      renameTopicMetadata(subjectKey, oldName, name);
+    }
+    closeModal(); refreshSubjectAppearance(); updateNavigationCounts(); notify('Topic updated.');
+  });
+}
+function renameTopicMetadata(subjectKey, oldName, name) {
+  const oldKey = `${subjectKey}::${oldName}`; const newKey = `${subjectKey}::${name}`;
+  for (const storageKey of ['revisie-topic-progress', 'revisie-starter-card-overrides', 'revisie-due']) {
+    const values = JSON.parse(localStorage.getItem(storageKey) || '{}');
+    Object.keys(values).forEach((key) => {
+      if (key === oldKey || key.startsWith(`${oldKey}::`)) { values[newKey + key.slice(oldKey.length)] = values[key]; delete values[key]; }
+    });
+    saveWorkspaceItem(storageKey, JSON.stringify(values));
+    if (storageKey === 'revisie-starter-card-overrides') { Object.keys(starterCardOverrides).forEach((key) => delete starterCardOverrides[key]); Object.assign(starterCardOverrides, values); }
+  }
+  const drafts = readCardDrafts(); const oldDraft = JSON.stringify([subjectKey, oldName]);
+  if (drafts[oldDraft]) { drafts[JSON.stringify([subjectKey, name])] = drafts[oldDraft]; delete drafts[oldDraft]; saveWorkspaceItem('revisie-flashcard-drafts', JSON.stringify(drafts)); }
+  const destination = JSON.parse(localStorage.getItem('revisie-card-destination') || '{}');
+  if (destination.subject === subjectKey && destination.unit === oldName) saveWorkspaceItem('revisie-card-destination', JSON.stringify({ ...destination, unit: name }));
+}
+function deleteTopic(subjectKey, topicName) {
+  const name = typeof topicName === 'number' ? customTopics[subjectKey]?.[topicName]?.name : topicName;
+  const topic = getUnits(subjectKey).find((unit) => unit.name === name);
+  if (!topic || !confirm(`Delete ${name} and all its flashcards?`)) return;
+  const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+  settings.deletedTopics = { ...settings.deletedTopics, [subjectKey]: [...new Set([...(settings.deletedTopics?.[subjectKey] || []), topic.sourceName || name, name])] };
+  const topics = { ...customTopics, [subjectKey]: (customTopics[subjectKey] || []).filter((unit) => unit.name !== name) };
+  const cards = userCards.filter((card) => card.subject !== subjectKey || card.unit !== name);
+  saveWorkspaceItem('revisie-settings', JSON.stringify(settings)); saveWorkspaceItem('revisie-topics', JSON.stringify(topics)); saveWorkspaceItem('revisie-flashcards', JSON.stringify(cards));
+  Object.assign(customTopics, topics); userCards.splice(0, userCards.length, ...cards); clearDeletedDeckMetadata(subjectKey, name);
+  refreshSubjectAppearance(); updateNavigationCounts(); notify('Topic deleted.');
+}
 function setupSubjectNotes() { const subjectRoutes = ['mathematics.html', 'biology.html', 'history.html', 'psychology.html', 'subject.html']; if (!subjectRoutes.some((route) => location.pathname.endsWith(route))) return; const wrap = document.querySelector('.page-wrap'); if (!wrap || document.querySelector('.subject-notes')) return; wrap.insertAdjacentHTML('beforeend', `<section class="notes-section"><div class="section-heading"><div><p class="eyebrow">SUBJECT NOTES</p><h2>Notes for this subject</h2></div><button class="text-button" data-action="notes">New note ${icon('plus')}</button></div><div class="subject-notes"></div></section>`); renderNoteSurfaces(); }
 function setupSubjectResources() { const subjectRoutes = ['mathematics.html', 'biology.html', 'history.html', 'psychology.html', 'subject.html']; if (!subjectRoutes.some((route) => location.pathname.endsWith(route))) return; const wrap = document.querySelector('.page-wrap'); if (!wrap || document.querySelector('.subject-resources')) return; wrap.insertAdjacentHTML('beforeend', `<section class="notes-section"><div class="section-heading"><div><p class="eyebrow">SUBJECT PDFS</p><h2>PDFs for this subject</h2></div><a class="text-button" href="resources.html?subject=${encodeURIComponent(currentSubject)}">Add PDF ${icon('plus')}</a></div><div class="subject-resources"></div></section>`); renderSubjectResources(); }
 function wire() { normalizeSidebar(); updateNavigationCounts(); cleanRemovedAssistant(); normalizeTopbar(); setupTopbarActions(); activateNav(); setupSettingsPage(); setupCustomSubjects(); setupCustomSubjectActions(); setupSubjectFilters();
@@ -791,10 +1274,14 @@ function wire() { normalizeSidebar(); updateNavigationCounts(); cleanRemovedAssi
   document.querySelectorAll('[data-action="review"]').forEach((button) => button.addEventListener('click', () => reviewCards(subjectData[button.dataset.subject || currentSubject].cards, `${subjectData[button.dataset.subject || currentSubject].label} / ${subjectData[button.dataset.subject || currentSubject].topic}`))); document.querySelectorAll('[data-action="notes"]').forEach((button) => button.addEventListener('click', openNotes)); document.querySelectorAll('[data-action="planner"]').forEach((button) => button.addEventListener('click', openPlanner)); const input = document.getElementById('askInput'); const ask = document.getElementById('askButton'); if (input && ask) { ask.addEventListener('click', () => assistantResponse(input)); input.addEventListener('keydown', (event) => { if (event.key === 'Enter') assistantResponse(input); }); } document.querySelectorAll('[data-prompt]').forEach((button) => button.addEventListener('click', () => { if (input) { input.value = button.dataset.prompt; input.focus(); } })); document.querySelectorAll('.subject-filter button').forEach((button) => button.addEventListener('click', () => { document.querySelectorAll('.subject-filter button').forEach((item) => item.classList.remove('active')); button.classList.add('active'); document.querySelectorAll('[data-subject-card]').forEach((card) => { card.hidden = button.dataset.filter !== 'all' && card.dataset.category !== button.dataset.filter; }); })); document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeModal(); }); lucide.createIcons(); }
 document.documentElement.classList.toggle('reduce-motion', Boolean(JSON.parse(localStorage.getItem('revisie-settings') || '{}').reduceMotion));
 wire();
-function syncSubjectPageLabel() { const eyebrow = document.querySelector('.page-intro .eyebrow'); if (!document.body.dataset.subject || !eyebrow) return; const custom = customSubjects.find((item) => item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === currentSubject); const legacyBoards = { history: 'AQA', psychology: 'AQA' }; const detail = custom?.topic || subjectData[currentSubject]?.board || legacyBoards[currentSubject]; if (detail) eyebrow.textContent = `GCSE HIGHER · ${detail}`; }
+function syncSubjectPageLabel() {
+  const eyebrow = document.querySelector('.page-intro .eyebrow');
+  if (!document.body.dataset.subject || !eyebrow) return;
+  const board = subjectData[currentSubject]?.board;
+  if (board) eyebrow.textContent = `GCSE HIGHER · ${board}`;
+}
 syncSubjectPageLabel();
-function enhanceSubjectFilters() { const filters = document.querySelector('.subject-filter'); if (!filters) return; const cards = [...document.querySelectorAll('[data-subject-card]')]; if (!cards.length) return; const status = document.createElement('p'); status.className = 'subject-filter-status'; status.hidden = true; status.setAttribute('aria-live', 'polite'); status.textContent = 'No subjects in this group yet.'; filters.after(status); filters.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => { const selected = button.dataset.filter; let visible = 0; filters.querySelectorAll('button').forEach((item) => { const active = item === button; item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active)); }); cards.forEach((card) => { const show = selected === 'all' || card.dataset.category === selected; card.hidden = !show; if (card.parentElement.classList.contains('custom-subject-wrap')) card.parentElement.hidden = !show; if (show) visible += 1; }); status.hidden = visible > 0; })); }
-enhanceSubjectFilters();
+function enhanceSubjectFilters() { const filters = document.querySelector('.subject-filter'); if (!filters) return; const cards = [...document.querySelectorAll('[data-subject-card]')]; if (!cards.length) return; const status = document.querySelector('.subject-filter-status') || document.createElement('p'); status.className = 'subject-filter-status'; status.hidden = true; status.setAttribute('aria-live', 'polite'); status.textContent = 'No subjects in this group yet.'; filters.after(status); filters.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => { const selected = button.dataset.filter; let visible = 0; filters.querySelectorAll('button').forEach((item) => { const active = item === button; item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active)); }); cards.forEach((card) => { const show = selected === 'all' || card.dataset.category === selected; card.hidden = !show; if (card.parentElement.matches('.custom-subject-wrap, .subject-style-wrap')) card.parentElement.hidden = !show; if (show) visible += 1; }); status.hidden = visible > 0; })); }
 function subjectProgress() { return JSON.parse(localStorage.getItem('revisie-subject-progress') || '{}'); }
 function topicProgress() { return JSON.parse(localStorage.getItem('revisie-topic-progress') || '{}'); }
 function topicProgressKey(subjectKey, unitName) { return `${subjectKey}::${unitName}`; }
@@ -815,7 +1302,7 @@ function renderTopicProgress() {
   });
 }
 function reviewCards(cards, title) {
-  const subjectKey = Object.entries(subjectData).find(([, subject]) => title.startsWith(`${subject.label} /`))?.[0] || currentSubject;
+  const subjectKey = subjectEntries().find(([, subject]) => title.startsWith(`${subject.label} /`))?.[0] || currentSubject;
   const unitName = title.split(' / ').slice(1).join(' / ');
   const queue = uniqueCards(cards);
   const total = queue.length;
@@ -852,45 +1339,63 @@ function setupPersonalAccount() {
   if (greeting && revisieAccount?.name) greeting.innerHTML = `Good morning, <em>${escapeHtml(revisieAccount.name)}.</em>`;
   document.querySelectorAll('.avatar').forEach((avatar) => { const name = revisieAccount?.name || 'Guest'; avatar.textContent = name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(); });
   const switcher = document.querySelector('.workspace-switcher');
-  if (switcher) { switcher.querySelector('strong')?.replaceChildren(document.createTextNode(revisieAccount?.name || 'Guest workspace')); switcher.querySelector('small')?.replaceChildren(document.createTextNode(revisieAccount ? 'Personal GCSE workspace' : 'Sign in to save work')); switcher.setAttribute('role', 'button'); switcher.setAttribute('tabindex', '0'); switcher.setAttribute('aria-label', 'Open account'); switcher.onclick = () => { location.href = 'account.html'; }; switcher.onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); switcher.click(); } }; }
-  const streak = document.querySelector('.streak-button'); if (streak && revisieAccount) { const state = streakState(); streak.querySelector('strong').textContent = `${state.current || 0} day streak`; streak.querySelector('small').textContent = 'Complete a review to keep it alive'; streak.querySelector('span')?.remove(); streak.onclick = openStreak; } else if (streak) streak.replaceWith(Object.assign(document.createElement('div'), { className: 'account-panel', innerHTML: `<div class="account-panel-icon">${icon('user-round')}</div><div><strong>Guest mode</strong><small>Sign in to track your streak</small></div>` }));
+  if (switcher) { switcher.querySelector('strong')?.replaceChildren(document.createTextNode(revisieAccount?.name || 'Guest workspace')); switcher.querySelector('small')?.replaceChildren(document.createTextNode(revisieAccount ? 'Personal Study Workspace' : 'Sign in to save work')); switcher.setAttribute('role', 'button'); switcher.setAttribute('tabindex', '0'); switcher.setAttribute('aria-label', 'Open account'); switcher.onclick = () => { location.href = 'account.html'; }; switcher.onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); switcher.click(); } }; }
+  renderProfile();
+  refreshStreakSurfaces();
   document.querySelectorAll('.activity-total').forEach((item) => item.remove());
 }
 function setupAccountRoute() { if (!location.pathname.endsWith('account.html')) return; const loginForm = document.getElementById('loginForm'); const signupForm = document.getElementById('signupForm'); if (!loginForm || !signupForm) return; const parameters = new URLSearchParams(location.search); const panels = document.querySelectorAll('[data-auth-panel]'); const tabs = document.querySelectorAll('[data-auth-mode]'); const setMode = (mode) => { panels.forEach((panel) => { panel.hidden = panel.dataset.authPanel !== mode; }); tabs.forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.authMode === mode))); history.replaceState(null, '', `account.html?mode=${mode}`); lucide.createIcons(); }; const requestedMode = parameters.get('mode'); setMode(requestedMode === 'signup' ? 'signup' : 'login'); tabs.forEach((tab) => tab.addEventListener('click', () => setMode(tab.dataset.authMode))); const account = JSON.parse(localStorage.getItem('revisie-account') || 'null'); if (account) document.getElementById('loginEmail').value = account.email || ''; if (parameters.get('confirmed') === '1') notify('Email confirmed — you can now log in.'); loginForm.addEventListener('submit', async (event) => { event.preventDefault(); const email = document.getElementById('loginEmail').value.trim(); const password = document.getElementById('loginPassword').value; const button = loginForm.querySelector('button'); button.disabled = true; button.textContent = 'Logging in…'; try { const client = await getSupabaseClient(); const { data, error } = await client.auth.signInWithPassword({ email, password }); if (error) throw error; const displayName = data.user?.user_metadata?.display_name || email.split('@')[0]; await restoreWorkspace(); saveWorkspaceItem('revisie-account', JSON.stringify({ id: data.user.id, name: displayName, email })); location.href = 'index.html'; } catch (error) { notify(error.message || 'Could not log in. Confirm your email first if this is a new account.'); } finally { button.disabled = false; button.innerHTML = `Log in ${icon('arrow-right')}`; lucide.createIcons(); } }); signupForm.addEventListener('submit', async (event) => { event.preventDefault(); const name = document.getElementById('signupName').value.trim(); const email = document.getElementById('signupEmail').value.trim(); const password = document.getElementById('signupPassword').value; const confirmation = document.getElementById('signupPasswordConfirm').value; if (password !== confirmation) { notify('Passwords do not match.'); return; } const button = signupForm.querySelector('button'); button.disabled = true; button.textContent = 'Creating account…'; try { const client = await getSupabaseClient(); const emailRedirectTo = new URL('account.html?mode=login&confirmed=1', location.href).href; const { error } = await client.auth.signUp({ email, password, options: { emailRedirectTo, data: { display_name: name } } }); if (error) throw error; document.getElementById('loginEmail').value = email; signupForm.reset(); setMode('login'); notify('Account created. Check your email, confirm it, then log in.'); } catch (error) { notify(error.message || 'Could not create your account.'); } finally { button.disabled = false; button.innerHTML = `Create account ${icon('mail')}`; lucide.createIcons(); } }); }
-function dueCards() { return JSON.parse(localStorage.getItem('revisie-due') || '{}'); }
+function dueCards() { return Object.fromEntries(Object.entries(JSON.parse(localStorage.getItem('revisie-due') || '{}')).filter(([key]) => subjectData[key] && !subjectData[key].deleted)); }
+function revisionStats(today = studyDate()) {
+  const progress = topicProgress();
+  const completed = plannerItems().filter((item) => item.done && (!item.date || validStudyDate(item.date) && item.date <= today));
+  const minutes = (item) => Math.max(0, Number(item.minutes) || 0);
+  const subjects = subjectEntries().map(([key, subject]) => {
+    const units = getUnits(key);
+    const cards = units.reduce((sum, unit) => sum + Math.min(getDeck(key, unit.name).length, Math.max(0, Number(progress[topicProgressKey(key, unit.name)]) || 0)), 0);
+    const sessions = completed.filter((item) => item.subject === key);
+    return { key, subject, cards, sessions: sessions.length, minutes: sessions.reduce((sum, item) => sum + minutes(item), 0) };
+  });
+  return { cards: subjects.reduce((sum, subject) => sum + subject.cards, 0), sessions: completed.length, minutes: completed.reduce((sum, item) => sum + minutes(item), 0), subjects };
+}
 function setupProgressRoute() {
   if (!location.pathname.endsWith('progress.html')) return;
-  const wrap = document.querySelector('.page-wrap');
-  const grid = document.querySelector('.stat-grid');
-  if (!wrap || !grid || document.querySelector('.allocation-panel')) return;
-  const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
-  wrap.insertAdjacentHTML('beforeend', `<section class="allocation-panel"><div class="section-heading"><div><p class="eyebrow">YOUR PLAN</p><h2>Allocate today's revision</h2></div></div><form id="allocationForm" class="allocation-form"><label>Minutes available<input id="allocationMinutes" type="number" min="5" max="300" step="5" value="${settings.minutes || 35}"></label><label>Subject<select id="allocationSubject">${Object.entries(subjectData).map(([key, subject]) => `<option value="${key}">${escapeHtml(subject.label)}</option>`).join('')}</select></label><label>Cards today<input id="allocationCards" type="number" min="0" max="150" value="0"></label><button class="primary-button" type="submit">Save today's plan ${icon('check')}</button></form><div class="allocation-list" aria-live="polite"></div></section>`);
-  const subjectInput = document.getElementById('allocationSubject');
-  const cardsInput = document.getElementById('allocationCards');
-  const render = () => {
-    const entries = Object.entries(dueCards()).filter(([, count]) => Number(count) > 0);
-    const total = entries.reduce((sum, [, count]) => sum + Number(count), 0);
-    const currentSettings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
-    grid.innerHTML = `<div class="stat-card"><div class="stat-icon coral">${icon('layers-3')}</div><div><span>Cards due today</span><strong>${total}</strong></div></div><div class="stat-card"><div class="stat-icon lime">${icon('clock-3')}</div><div><span>Study time allocated</span><strong>${currentSettings.minutes || 35}<small> mins</small></strong></div></div><div class="stat-card"><div class="stat-icon blue">${icon('list-checks')}</div><div><span>Subjects planned</span><strong>${entries.length}</strong></div></div>`;
-    wrap.querySelector('.allocation-list').innerHTML = entries.length ? entries.map(([key, count]) => `<div class="allocation-list-row"><span>${escapeHtml(subjectData[key]?.label || key)}</span><strong>${Number(count)} cards</strong></div>`).join('') : '<p class="empty-state">No subjects allocated yet. Choose a subject and save a plan to get started.</p>';
-    cardsInput.value = Number(dueCards()[subjectInput.value] || 0);
-    lucide.createIcons();
-  };
-  subjectInput.addEventListener('change', () => { cardsInput.value = Number(dueCards()[subjectInput.value] || 0); });
-  document.getElementById('allocationForm').addEventListener('submit', (event) => {
-    event.preventDefault();
-    const due = dueCards();
-    const count = Number(cardsInput.value) || 0;
-    if (count) due[subjectInput.value] = count; else delete due[subjectInput.value];
-    saveWorkspaceItem('revisie-due', JSON.stringify(due));
-    const currentSettings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
-    saveWorkspaceItem('revisie-settings', JSON.stringify({ ...currentSettings, minutes: Number(document.getElementById('allocationMinutes').value) || 35 }));
-    render();
-    notify("Today's plan saved.");
-  });
-  render();
+  const wrap = document.querySelector('.page-wrap'); const grid = document.querySelector('.stat-grid');
+  if (!wrap || !grid) return;
+  const stats = revisionStats();
+  grid.innerHTML = `<div class="stat-card"><div class="stat-icon coral">${icon('check-check')}</div><div><span>Cards marked known</span><strong>${stats.cards}</strong></div></div><div class="stat-card"><div class="stat-icon lime">${icon('list-checks')}</div><div><span>Sessions completed</span><strong>${stats.sessions}</strong></div></div><div class="stat-card"><div class="stat-icon blue">${icon('clock-3')}</div><div><span>Study time completed</span><strong>${stats.minutes}<small> mins</small></strong></div></div>`;
+  let section = wrap.querySelector('.revision-summary');
+  if (!section) {
+    section = document.createElement('section'); section.className = 'revision-summary'; section.setAttribute('aria-labelledby', 'revisionSummaryTitle'); wrap.appendChild(section);
+  }
+  const subjects = stats.subjects.filter((subject) => subject.cards || subject.sessions);
+  section.innerHTML = `<div class="section-heading"><div><p class="eyebrow">REVISION DONE</p><h2 id="revisionSummaryTitle">Your work by subject</h2></div></div><p class="revision-summary-note">Cards marked known in your current decks, plus sessions you've marked complete. Study time uses each completed session's duration.</p><div class="revision-subjects">${subjects.length ? subjects.map((item) => `<a class="revision-subject" href="${subjectRoute(item.key)}"><div class="subject-icon ${item.subject.color || 'blue'}">${subjectSymbol(item.subject)}</div><div class="revision-subject-name"><strong>${escapeHtml(item.subject.label)}</strong><small>${item.cards} ${item.cards === 1 ? 'card' : 'cards'} marked known</small></div><div class="revision-subject-sessions"><strong>${item.minutes} min</strong><small>${item.sessions} ${item.sessions === 1 ? 'session' : 'sessions'} complete</small></div>${icon('arrow-up-right')}</a>`).join('') : '<p class="empty-state">No revision recorded yet. Review some flashcards or mark a study session complete to see your progress here.</p>'}</div>`;
+  lucide.createIcons();
 }
-function setupOverviewRoute() { if (!location.pathname.endsWith('index.html') && location.pathname !== '/') return; const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}'); const allocations = dueCards(); const plannedSubject = Object.keys(allocations).find((key) => Number(allocations[key]) > 0) || settings.subject || 'mathematics'; const subject = subjectData[plannedSubject] || subjectData.mathematics; const due = allocations[plannedSubject] || 0; const label = document.querySelector('.continue-body .subject-label'); const title = document.querySelector('.continue-body h3'); const detail = document.querySelector('.continue-body p'); const button = document.getElementById('startReview'); const grid = document.getElementById('overviewSubjects'); if (label) label.textContent = subject.label.toUpperCase(); if (title) title.textContent = subject.topic; if (detail) detail.textContent = due ? `${due} cards allocated today` : 'No cards allocated today'; if (button) { button.dataset.subject = plannedSubject; button.onclick = () => reviewCards(subject.cards, `${subject.label} / ${subject.topic}`); } if (grid) { const builtIn = Object.entries(subjectData).map(([key, item]) => ({ key, name: item.label, topic: item.topic, color: item.color || 'blue', icon: item.icon || 'book-open' })); const personal = customSubjects.filter((item) => !subjectData[item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')]).map((item) => ({ key: item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: item.name, topic: item.topic, color: 'blue', icon: 'book-open', personal: true })); grid.innerHTML = [...builtIn, ...personal].map((item) => { const route = item.personal || !['mathematics', 'biology', 'history', 'psychology'].includes(item.key) ? `subject.html?name=${encodeURIComponent(item.name)}` : `${item.key}.html`; return `<a class="subject-card" href="${route}"><div class="subject-top"><div class="subject-icon ${item.color}">${icon(item.icon)}</div></div><strong>${item.name}</strong><small>${item.topic}</small></a>`; }).join(''); lucide.createIcons(); } }
+function setupOverviewRoute() {
+  if (!location.pathname.endsWith('index.html') && location.pathname !== '/') return;
+  const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}'); const entries = subjectEntries(); const allocations = dueCards();
+  const plannedSubject = entries.find(([key]) => Number(allocations[key]) > 0)?.[0] || entries.find(([key]) => key === settings.subject)?.[0] || entries[0]?.[0];
+  const subject = subjectData[plannedSubject]; const unit = subject ? getUnits(plannedSubject)[0] : null; const deck = unit ? getDeck(plannedSubject, unit.name) : [];
+  const label = document.querySelector('.continue-body .subject-label'); const title = document.querySelector('.continue-body h3'); const detail = document.querySelector('.continue-body p'); const button = document.getElementById('startReview'); const grid = document.getElementById('overviewSubjects');
+  if (label) label.textContent = subject ? subject.label.toUpperCase() : 'YOUR SUBJECTS';
+  if (title) title.textContent = unit?.name || (subject ? 'Add your first topic' : 'Add a subject to get started');
+  if (detail) detail.textContent = deck.length ? Number(allocations[plannedSubject]) > 0 ? `${allocations[plannedSubject]} cards allocated today` : 'No cards allocated today' : subject ? 'Create a flashcard to start this deck.' : 'Choose the subjects you want in your workspace.';
+  if (button) {
+    button.textContent = deck.length ? 'Resume review' : subject ? 'Add flashcards' : 'Add a subject'; button.dataset.subject = plannedSubject || '';
+    button.onclick = deck.length ? () => reviewCards(deck, `${subject.label} / ${unit.name}`) : subject ? () => openCardComposer(plannedSubject) : () => { location.href = 'subjects.html'; };
+  }
+  if (grid) {
+    grid.innerHTML = entries.map(([key, item]) => `<a class="subject-card" href="${subjectRoute(key)}"><div class="subject-top"><div class="subject-icon ${item.color || 'blue'}">${subjectSymbol(item)}</div></div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(getUnits(key)[0]?.name || 'No topics yet')}</small></a>`).join('') || '<p class="empty-state">No subjects yet. Add one from the Subjects page.</p>';
+    lucide.createIcons();
+  }
+}
+function renderDeletedSubjectRoute() {
+  if (!['mathematics.html', 'biology.html', 'history.html', 'psychology.html', 'subject.html'].some((route) => location.pathname.endsWith(route))) return;
+  if (!subjectData[currentSubject]?.deleted) return;
+  const wrap = document.querySelector('.page-wrap'); if (!wrap) return;
+  wrap.innerHTML = `<section class="page-intro"><p class="eyebrow">SUBJECTS</p><h1>Subject deleted.</h1><p class="hero-copy">This subject is no longer in your workspace.</p><a class="primary-button" href="subjects.html">Go to Subjects</a></section>`;
+}
 const timetableStyles = document.createElement('style');
 timetableStyles.textContent = `.timetable-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:30px 0 18px}.timetable-date{display:flex;align-items:center;gap:9px}.timetable-date strong{font-size:16px;letter-spacing:-.04em}.timetable-date button,.timetable-add{display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--teal)}.timetable-add{width:auto;padding:0 12px;display:flex;gap:7px;font-weight:700;font-size:10px}.timetable-add svg{width:14px}.timetable-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px;align-items:start}.subject-tray,.timetable-board{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(23,35,33,.04)}.subject-tray{padding:16px}.subject-tray h2{font-size:14px;margin-bottom:5px}.subject-tray p{font-size:10px;line-height:1.55;color:var(--muted);margin-bottom:14px}.subject-chip-list{display:grid;gap:7px}.subject-chip{display:flex;align-items:center;gap:8px;width:100%;padding:10px;border:1px solid var(--line);border-radius:7px;background:#fff;text-align:left;font-size:10px;font-weight:700;touch-action:manipulation}.subject-chip:hover,.subject-chip.selected{background:#edf4ee;border-color:#a9c3ae}.subject-chip .subject-dot{width:8px;height:8px;border-radius:50%;background:var(--chip,#376f68);flex:0 0 auto}.subject-chip small{margin-left:auto;color:var(--muted);font-weight:500}.timetable-board{overflow:hidden}.timetable-note{display:flex;align-items:center;gap:7px;padding:12px 15px;background:#f5f8f3;border-bottom:1px solid var(--line);font-size:10px;color:var(--muted)}.timetable-note svg{width:14px;color:var(--teal)}.time-grid{max-height:660px;overflow-y:auto}.time-row{display:grid;grid-template-columns:66px 1fr;min-height:68px;border-bottom:1px solid #edf0eb}.time-row:last-child{border-bottom:0}.time-label{padding:11px 10px;color:#84908a;font:9px 'DM Mono',monospace;text-align:right}.time-slot{position:relative;padding:7px;border-left:1px solid #edf0eb;background:repeating-linear-gradient(to bottom,transparent 0,transparent 33px,#f5f7f4 34px);min-height:68px}.time-slot.drag-over{background:#edf6ef;outline:2px dashed #76a47d;outline-offset:-4px}.time-slot:focus-visible{outline:2px solid var(--coral);outline-offset:-3px}.session-card{display:flex;align-items:center;gap:7px;min-height:52px;width:100%;padding:9px 10px;background:var(--session,#e8f0e8);border-left:3px solid var(--session-strong,#376f68);border-radius:6px;text-align:left;font-size:10px;cursor:grab}.session-card:active{cursor:grabbing}.session-card.done{opacity:.58}.session-card strong,.session-card small{display:block}.session-card strong{font-size:10px}.session-card small{color:#53645c;font-size:9px;margin-top:3px}.session-card .session-complete{margin-left:auto;width:23px;height:23px;border-radius:50%;border:1px solid #9ab59f;color:#376f68}.slot-add-hint{display:none;color:#9aa49e;font-size:9px;padding:13px}.time-slot:hover .slot-add-hint{display:block}.timetable-summary{display:flex;gap:13px;margin:16px 0;color:var(--muted);font-size:10px}.timetable-summary strong{color:var(--ink)}@media(max-width:760px){.timetable-toolbar{margin-top:22px}.timetable-layout{grid-template-columns:1fr}.subject-tray{padding:13px}.subject-tray p{margin-bottom:10px}.subject-chip-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:177px;overflow:auto}.subject-chip{padding:9px;font-size:9px}.subject-chip small{display:none}.timetable-note{font-size:9px}.time-grid{max-height:none}.time-row{grid-template-columns:53px 1fr;min-height:64px}.time-label{padding-left:4px;padding-right:8px}.time-slot{min-height:64px}.slot-add-hint{display:block}.session-card{min-height:48px}.timetable-summary{margin:12px 0}.timetable-add{padding:0 9px}.timetable-add span{display:none}}`;
 document.head.appendChild(timetableStyles);
@@ -899,16 +1404,54 @@ timetableFormStyles.textContent = '.timetable-form-grid{display:grid;grid-templa
 document.head.appendChild(timetableFormStyles);
 
 function timetableDateLabel(date) { return new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(`${date}T12:00:00`)); }
-function shiftTimetableDate(date, days) { const next = new Date(`${date}T12:00:00`); next.setDate(next.getDate() + days); return next.toISOString().slice(0, 10); }
-function timetableSubjects() { const personal = customSubjects.map((subject) => [subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), { label: subject.name, color: 'blue' }]); return [...Object.entries(subjectData), ...personal.filter(([key]) => !subjectData[key])]; }
+function shiftTimetableDate(date, days) { return shiftStudyDate(date, days); }
+function timetableSubjects() { const personal = customSubjects.map((subject) => [subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), { label: subject.name, color: 'blue' }]); return [...subjectEntries(), ...personal.filter(([key]) => !subjectData[key])]; }
 function sessionStartHour(item, position) { const hour = Number(String(item.start || '').slice(0, 2)); return Number.isFinite(hour) && hour >= 8 && hour <= 21 ? hour : Math.min(21, 16 + position); }
-function openTimetableSession(item = null, date = new Date().toISOString().slice(0, 10), start = '16:00') { const items = plannerItems(); const subjectOptions = timetableSubjects().map(([key, subject]) => `<option value="${key}" ${key === (item?.subject || currentSubject) ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`).join(''); const backdrop = openModal(item ? 'Edit timetable session' : 'Add a timetable session', `<form class="notes-form" id="timetableSessionForm"><input id="timetableTitle" class="note-title" required placeholder="What will you revise?" value="${escapeHtml(item?.title || '')}"><select id="timetableSubject" class="note-subject">${subjectOptions}</select><div class="timetable-form-grid"><label>Date<input id="timetableDate" type="date" value="${item?.date || date}"></label><label>Start time<input id="timetableStart" type="time" value="${item?.start || start}"></label><label>Minutes<input id="timetableMinutes" type="number" min="5" max="300" step="5" value="${item?.minutes || 30}"></label></div><button class="primary-button" type="submit">Save to timetable ${icon('check')}</button></form>`); backdrop.querySelector('#timetableSessionForm').addEventListener('submit', (event) => { event.preventDefault(); const next = { id: item?.id || Date.now(), title: backdrop.querySelector('#timetableTitle').value.trim(), subject: backdrop.querySelector('#timetableSubject').value, date: backdrop.querySelector('#timetableDate').value, start: backdrop.querySelector('#timetableStart').value || '16:00', minutes: Number(backdrop.querySelector('#timetableMinutes').value) || 30, done: item?.done || false }; const index = items.findIndex((entry) => entry.id === next.id); if (index < 0) items.push(next); else items[index] = next; saveWorkspaceItem('revisie-planner-items', JSON.stringify(items)); closeModal(); renderTimetable(); notify('Session saved to your timetable.'); }); }
-function renderTimetable() { const app = document.getElementById('timetableApp'); if (!app) return; const date = app.dataset.date || new Date().toISOString().slice(0, 10); const selectedSubject = app.dataset.subject || ''; const allItems = plannerItems(); const dayItems = allItems.filter((item) => item.date === date); const scheduledMinutes = dayItems.reduce((total, item) => total + Number(item.minutes || 0), 0); const allocated = dueCards(); const subjects = timetableSubjects(); const byHour = new Map(); dayItems.forEach((item, index) => { const hour = sessionStartHour(item, index); if (!byHour.has(hour)) byHour.set(hour, []); byHour.get(hour).push(item); }); const rows = Array.from({ length: 14 }, (_, index) => { const hour = index + 8; const time = `${String(hour).padStart(2, '0')}:00`; const sessions = (byHour.get(hour) || []).map((item) => { const subject = subjectData[item.subject] || subjects.find(([key]) => key === item.subject)?.[1] || { label: item.subject, color: 'blue' }; const palette = { coral: ['#fff0eb', '#e46a54'], green: ['#e5f2e4', '#4f8955'], yellow: ['#fff4d5', '#a37e2d'], blue: ['#e4f0f7', '#39718c'], pink: ['#f8e6e5', '#ad696d'] }[subject.color] || ['#e8f0e8', '#376f68']; return `<div role="button" tabindex="0" class="session-card ${item.done ? 'done' : ''}" draggable="true" data-session-id="${item.id}" style="--session:${palette[0]};--session-strong:${palette[1]}" title="Drag to move ${escapeHtml(item.title)}"><span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(subject.label)} · ${item.start || time} · ${item.minutes} min</small></span><button class="session-complete" type="button" data-complete-session="${item.id}" aria-label="Mark ${escapeHtml(item.title)} ${item.done ? 'not done' : 'done'}">${icon(item.done ? 'check' : 'circle')}</button></div>`; }).join(''); return `<div class="time-row"><div class="time-label">${time}</div><div class="time-slot" data-time="${time}" role="button" tabindex="0" aria-label="${time} time slot">${sessions || '<span class="slot-add-hint">Tap to add here</span>'}</div></div>`; }).join(''); app.innerHTML = `<div class="timetable-toolbar"><div class="timetable-date"><button type="button" data-timetable-day="-1" aria-label="Previous day">${icon('chevron-left')}</button><strong>${timetableDateLabel(date)}</strong><button type="button" data-timetable-day="1" aria-label="Next day">${icon('chevron-right')}</button></div><button class="timetable-add" type="button" id="timetableAdd">${icon('plus')}<span>Add session</span></button></div><div class="timetable-summary"><span><strong>${scheduledMinutes} min</strong> scheduled</span><span><strong>${dayItems.length}</strong> sessions</span></div><div class="timetable-layout"><aside class="subject-tray"><h2>Revision planner</h2><p>Choose a subject, then tap a time. On desktop, you can also drag it into the day.</p><div class="subject-chip-list">${subjects.map(([key, subject]) => `<button class="subject-chip ${selectedSubject === key ? 'selected' : ''}" type="button" draggable="true" data-subject-chip="${key}" style="--chip:${({ coral: '#e46a54', green: '#4f8955', yellow: '#a37e2d', blue: '#39718c', pink: '#ad696d' }[subject.color] || '#376f68')}"><i class="subject-dot"></i>${escapeHtml(subject.label)}<small>${Number(allocated[key] || 0)} cards</small></button>`).join('')}</div></aside><section class="timetable-board" aria-label="Daily revision timetable"><div class="timetable-note">${icon('mouse-pointer-2')} Drag a subject or session into a time slot · tap works on mobile</div><div class="time-grid">${rows}</div></section></div>`; lucide.createIcons();
+function openTimetableSession(item = null, date = studyDate(), start = '16:00') { const items = plannerItems(); const subjectOptions = timetableSubjects().map(([key, subject]) => `<option value="${key}" ${key === (item?.subject || currentSubject) ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`).join(''); const backdrop = openModal(item ? 'Edit timetable session' : 'Add a timetable session', `<form class="notes-form" id="timetableSessionForm"><input id="timetableTitle" class="note-title" required placeholder="What will you revise?" value="${escapeHtml(item?.title || '')}"><select id="timetableSubject" class="note-subject">${subjectOptions}</select><div class="timetable-form-grid"><label>Date<input id="timetableDate" type="date" value="${item?.date || date}"></label><label>Start time<input id="timetableStart" type="time" value="${item?.start || start}"></label><label>Minutes<input id="timetableMinutes" type="number" min="5" max="300" step="5" value="${item?.minutes || 30}"></label></div><button class="primary-button" type="submit">Save to timetable ${icon('check')}</button></form>`); backdrop.querySelector('#timetableSessionForm').addEventListener('submit', (event) => { event.preventDefault(); const next = { id: item?.id || Date.now(), title: backdrop.querySelector('#timetableTitle').value.trim(), subject: backdrop.querySelector('#timetableSubject').value, date: backdrop.querySelector('#timetableDate').value, start: backdrop.querySelector('#timetableStart').value || '16:00', minutes: Number(backdrop.querySelector('#timetableMinutes').value) || 30, done: item?.done || false }; const index = items.findIndex((entry) => entry.id === next.id); if (index < 0) items.push(next); else items[index] = next; saveWorkspaceItem('revisie-planner-items', JSON.stringify(items)); closeModal(); renderTimetable(); notify('Session saved to your timetable.'); }); }
+function renderTimetable() { const app = document.getElementById('timetableApp'); if (!app) return; const date = app.dataset.date || studyDate(); const selectedSubject = app.dataset.subject || ''; const allItems = plannerItems(); const dayItems = allItems.filter((item) => item.date === date); const scheduledMinutes = dayItems.reduce((total, item) => total + Number(item.minutes || 0), 0); const allocated = dueCards(); const subjects = timetableSubjects(); const byHour = new Map(); dayItems.forEach((item, index) => { const hour = sessionStartHour(item, index); if (!byHour.has(hour)) byHour.set(hour, []); byHour.get(hour).push(item); }); const rows = Array.from({ length: 14 }, (_, index) => { const hour = index + 8; const time = `${String(hour).padStart(2, '0')}:00`; const sessions = (byHour.get(hour) || []).map((item) => { const subject = subjectData[item.subject] || subjects.find(([key]) => key === item.subject)?.[1] || { label: item.subject, color: 'blue' }; const palette = subjectColourPalette[subject.color] || subjectColourPalette.green; return `<div role="button" tabindex="0" class="session-card ${item.done ? 'done' : ''}" draggable="true" data-session-id="${item.id}" style="--session:${palette[0]};--session-strong:${palette[1]}" title="Drag to move ${escapeHtml(item.title)}"><span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(subject.label)} · ${item.start || time} · ${item.minutes} min</small></span><button class="session-complete" type="button" data-complete-session="${item.id}" aria-label="Mark ${escapeHtml(item.title)} ${item.done ? 'not done' : 'done'}">${icon(item.done ? 'check' : 'circle')}</button></div>`; }).join(''); return `<div class="time-row"><div class="time-label">${time}</div><div class="time-slot" data-time="${time}" role="button" tabindex="0" aria-label="${time} time slot">${sessions || '<span class="slot-add-hint">Tap to add here</span>'}</div></div>`; }).join(''); app.innerHTML = `<div class="timetable-toolbar"><div class="timetable-date"><button type="button" data-timetable-day="-1" aria-label="Previous day">${icon('chevron-left')}</button><strong>${timetableDateLabel(date)}</strong><button type="button" data-timetable-day="1" aria-label="Next day">${icon('chevron-right')}</button></div><button class="timetable-add" type="button" id="timetableAdd">${icon('plus')}<span>Add session</span></button></div><div class="timetable-summary"><span><strong>${scheduledMinutes} min</strong> scheduled</span><span><strong>${dayItems.length}</strong> sessions</span></div><div class="timetable-layout"><aside class="subject-tray"><h2>Revision planner</h2><p>Choose a subject, then tap a time. On desktop, you can also drag it into the day.</p><div class="subject-chip-list">${subjects.map(([key, subject]) => `<button class="subject-chip ${selectedSubject === key ? 'selected' : ''}" type="button" draggable="true" data-subject-chip="${key}" style="--chip:${(subjectColourPalette[subject.color]?.[1] || '#376f68')}"><i class="subject-dot"></i>${escapeHtml(subject.label)}<small>${Number(allocated[key] || 0)} cards</small></button>`).join('')}</div></aside><section class="timetable-board" aria-label="Daily revision timetable"><div class="timetable-note">${icon('mouse-pointer-2')} Drag a subject or session into a time slot · tap works on mobile</div><div class="time-grid">${rows}</div></section></div>`; lucide.createIcons();
   app.querySelectorAll('[data-timetable-day]').forEach((button) => button.addEventListener('click', () => { app.dataset.date = shiftTimetableDate(date, Number(button.dataset.timetableDay)); app.dataset.subject = ''; renderTimetable(); }));
   app.querySelector('#timetableAdd').addEventListener('click', () => openTimetableSession(null, date));
   app.querySelectorAll('[data-subject-chip]').forEach((chip) => { chip.addEventListener('click', () => { app.dataset.subject = app.dataset.subject === chip.dataset.subjectChip ? '' : chip.dataset.subjectChip; renderTimetable(); }); chip.addEventListener('dragstart', (event) => { event.dataTransfer.setData('text/plain', `subject:${chip.dataset.subjectChip}`); }); });
   app.querySelectorAll('.session-card').forEach((card) => { card.addEventListener('dragstart', (event) => { event.dataTransfer.setData('text/plain', `session:${card.dataset.sessionId}`); }); card.addEventListener('keydown', (event) => { if (event.target === card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.stopPropagation(); card.click(); } }); card.addEventListener('click', (event) => { if (!event.target.closest('[data-complete-session]')) openTimetableSession(allItems.find((item) => String(item.id) === card.dataset.sessionId), date); }); });
-  app.querySelectorAll('[data-complete-session]').forEach((button) => button.addEventListener('click', (event) => { event.stopPropagation(); const item = allItems.find((entry) => String(entry.id) === button.dataset.completeSession); if (item) { item.done = !item.done; saveWorkspaceItem('revisie-planner-items', JSON.stringify(allItems)); renderTimetable(); } }));
+  app.querySelectorAll('[data-complete-session]').forEach((button) => button.addEventListener('click', (event) => { event.stopPropagation(); const item = allItems.find((entry) => String(entry.id) === button.dataset.completeSession); if (item) { item.done = !item.done; completePlannerStudy(item); saveWorkspaceItem('revisie-planner-items', JSON.stringify(allItems)); renderTimetable(); } }));
   app.querySelectorAll('.time-slot').forEach((slot) => { const addToSlot = () => { const time = slot.dataset.time; if (app.dataset.subject) { const subject = subjectData[app.dataset.subject] || subjects.find(([key]) => key === app.dataset.subject)?.[1]; openTimetableSession({ subject: app.dataset.subject, title: `${subject?.label || 'Revision'} revision` }, date, time); } else openTimetableSession(null, date, time); }; slot.addEventListener('click', (event) => { if (!event.target.closest('.session-card')) addToSlot(); }); slot.addEventListener('keydown', (event) => { if (event.target !== slot) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); addToSlot(); } }); slot.addEventListener('dragover', (event) => { event.preventDefault(); slot.classList.add('drag-over'); }); slot.addEventListener('dragleave', () => slot.classList.remove('drag-over')); slot.addEventListener('drop', (event) => { event.preventDefault(); slot.classList.remove('drag-over'); const [kind, value] = event.dataTransfer.getData('text/plain').split(':'); if (kind === 'session') { const item = allItems.find((entry) => String(entry.id) === value); if (item) { item.date = date; item.start = slot.dataset.time; saveWorkspaceItem('revisie-planner-items', JSON.stringify(allItems)); renderTimetable(); notify('Session moved.'); } } if (kind === 'subject') { const subject = subjectData[value] || subjects.find(([key]) => key === value)?.[1]; openTimetableSession({ subject: value, title: `${subject?.label || 'Revision'} revision` }, date, slot.dataset.time); } }); }); }
 function setupTimetableRoute() { if (!location.pathname.endsWith('planner.html')) return; const app = document.getElementById('timetableApp'); if (app) renderTimetable(); }
-setupPersonalAccount(); setupAccountRoute(); setupProgressRoute(); setupOverviewRoute(); setupTimetableRoute(); setupSharedItemPage(); void prepareResourceLibrary(); restoreSignedInAccount(); void hydrateNotePhotos();
+setupSubjectAppearanceButtons(); lucide.createIcons(); setupPersonalAccount(); setupAccountRoute(); setupProgressRoute(); setupOverviewRoute(); setupTimetableRoute(); renderDeletedSubjectRoute(); setupSharedItemPage(); void prepareResourceLibrary(); restoreSignedInAccount(); void hydrateNotePhotos();
+
+// Recalculate after midnight, returning to a tab, or activity in another tab.
+setInterval(refreshStreakSurfaces, 60000);
+window.addEventListener('focus', refreshStreakSurfaces);
+window.addEventListener('storage', (event) => { if (event.key === 'revisie-streak' || event.key === null) refreshStreakSurfaces(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshStreakSurfaces(); });
+
+window.addEventListener('storage', (event) => { if (event.key === 'revisie-settings') { registerCustomSubjects(); renderProfile(); refreshSubjectAppearance(); } });
+
+// Disclosures keep edit/delete actions out of the card's normal click targets.
+document.addEventListener('click', (event) => {
+  document.querySelectorAll('.item-actions[open]').forEach((menu) => { if (!menu.contains(event.target)) menu.open = false; });
+  const chosen = event.target.closest('.item-actions-list button')?.closest('.item-actions');
+  if (chosen) { chosen.open = false; chosen.querySelector('summary').focus(); }
+}, true);
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  const menus = [...document.querySelectorAll('.item-actions[open]')];
+  if (!menus.length) return;
+  event.preventDefault(); event.stopImmediatePropagation();
+  menus.forEach((menu) => { menu.open = false; if (menu.contains(document.activeElement)) menu.querySelector('summary').focus(); });
+}, true);
+document.addEventListener('focusin', (event) => {
+  document.querySelectorAll('.item-actions[open]').forEach((menu) => { if (!menu.contains(event.target)) menu.open = false; });
+});
+
+document.addEventListener('toggle', (event) => {
+  const menu = event.target;
+  if (!menu.matches('.item-actions') || !menu.open) return;
+  const list = menu.querySelector('.item-actions-list');
+  list.style.transform = ''; menu.classList.remove('opens-up');
+  const rect = list.getBoundingClientRect();
+  const shift = rect.left < 12 ? 12 - rect.left : rect.right > window.innerWidth - 12 ? window.innerWidth - 12 - rect.right : 0;
+  if (shift) list.style.transform = `translateX(${shift}px)`;
+  const boundary = menu.closest('.modal-body')?.getBoundingClientRect();
+  const bottom = Math.min(window.innerHeight - 12, boundary ? boundary.bottom - 8 : Infinity);
+  if (rect.bottom > bottom) menu.classList.add('opens-up');
+}, true);

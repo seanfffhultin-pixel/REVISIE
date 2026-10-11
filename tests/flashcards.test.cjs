@@ -35,7 +35,7 @@ function harness(initial = {}, remoteCards = [], options = {}) {
   };
   const context = vm.createContext({ localStorage, crypto: webcrypto, console: { warn() {} }, setTimeout: () => 1, clearTimeout() {}, window: { addEventListener() {} }, document: { addEventListener() {} }, getSupabaseClient: async () => client, getDeck: () => [], getUnits: () => [{ name: 'Cells' }] });
   vm.runInContext(`
-    const syncedStorageKeys = ['revisie-flashcards','revisie-topics','revisie-note-library'];
+    const syncedStorageKeys = ['revisie-flashcards','revisie-topics','revisie-note-library','revisie-streak'];
     const notePhotoCache = new Map(); function storedNoteMetadata(note) { return note; }
     const workspaceTimestampKey = 'timestamp'; const workspaceOwnerKey = 'owner'; let workspaceSyncTimer;
     const nativeLocalStorageSetItem = localStorage.setItem.bind(localStorage);
@@ -132,7 +132,7 @@ test('whole app starts with stored personal subjects and safe imported content',
   const storage = new Map([['revisie-subjects', '[{"name":"My subject","topic":"My unit"}]']]);
   const node = () => ({ dataset: {}, style: {}, classList: { add() {}, remove() {}, toggle() {} }, appendChild() {}, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], setAttribute() {} });
   const document = { body: node(), documentElement: node(), head: node(), createElement: node, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, addEventListener() {} };
-  const context = vm.createContext({ document, window: { addEventListener() {}, supabase: { createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }) } }, localStorage: Object.freeze({ getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }), location: { pathname: '/flashcards.html', search: '', href: 'https://example.test/flashcards.html' }, navigator: {}, lucide: { createIcons() {} }, crypto: webcrypto, URL, URLSearchParams, console, setTimeout: () => 1, clearTimeout() {} });
+  const context = vm.createContext({ document, window: { addEventListener() {}, supabase: { createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }) } }, localStorage: Object.freeze({ getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }), location: { pathname: '/flashcards.html', search: '', href: 'https://example.test/flashcards.html' }, navigator: {}, lucide: { createIcons() {} }, crypto: webcrypto, URL, URLSearchParams, console, setInterval: () => 1, setTimeout: () => 1, clearTimeout() {} });
   vm.runInContext(source, context);
   assert.equal(vm.runInContext('subjectData["my-subject"].category', context), 'custom');
   assert.equal(vm.runInContext('getUnits("my-subject")[0].name', context), 'My unit');
@@ -144,9 +144,25 @@ test('whole app starts with stored personal subjects and safe imported content',
 });
 
 test('legacy cards remain reachable even when their topic metadata is missing', () => {
-  const context = vm.createContext({ subjectData: { biology: { topic: 'Cells', cards: [] } }, customTopics: {}, userCards: [card('saved', 'Legacy question')], buildUnitDeck: () => [] });
+  const context = vm.createContext({ subjectData: { biology: { topic: 'Cells', cards: [] } }, customTopics: {}, userCards: [card('saved', 'Legacy question')], buildUnitDeck: () => [], localStorage: { getItem: () => null } });
   const getUnits = source.slice(source.indexOf('function getUnits('), source.indexOf('function starterCardKey('));
   context.userCards[0].unit = 'Old topic';
   vm.runInContext(getUnits, context);
   assert.deepEqual(Array.from(context.getUnits('biology'), unit => unit.name), ['Cells', 'Old topic']);
+});
+
+test('workspace sync merges study days across devices and retries conflicts', async () => {
+  const h = harness({ 'revisie-workspace-sync-v2': '1' }, [], {
+    beforeWrite({ writes, remote }) {
+      if (writes === 1) {
+        remote.data['revisie-streak'] = JSON.stringify({ days: ['2026-10-09', '2026-10-10'] });
+        remote.updated_at = '2026-03-01T00:00:00.000Z';
+      }
+    }
+  });
+  h.context.saveWorkspaceItem('revisie-streak', JSON.stringify({ days: ['2026-10-11'] }));
+  assert.equal(await h.context.syncWorkspaceNow(), true);
+  assert.equal(h.writes, 2);
+  assert.deepEqual(JSON.parse(h.remote.data['revisie-streak']).days, ['2026-10-09', '2026-10-10', '2026-10-11']);
+  assert.equal(h.storage.get('revisie-streak'), h.remote.data['revisie-streak']);
 });
