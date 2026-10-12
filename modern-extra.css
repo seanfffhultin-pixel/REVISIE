@@ -747,3 +747,29 @@ body .revision-subject > svg { flex: 0 0 15px; width: 15px; color: var(--muted);
   body .revision-subject-sessions { margin-left: 50px; text-align: left; }
   body .revision-subject > svg { margin-left: auto; }
 }
+
+body .account-settings { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 32px; max-width: 720px; border-bottom: 0; }
+body .account-settings p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+body .account-settings h2, body .account-settings h3 { margin: 0; }
+body .account-settings h3 { margin-top: 14px; }
+body .account-settings button { justify-self: start; }
+body .auth-card > section > .text-button { margin-top: 18px; margin-right: 16px; }
+body .auth-card [role="status"] { font-size: 12px; line-height: 1.65; }
+
+body .streak-share-entry { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 8px 0 16px; }
+body .streak-share-entry small { font-size: 11px; color: var(--muted); }
+body .streak-share-entry button:disabled { opacity: .5; cursor: default; }
+body .streak-share { display: grid; gap: 16px; }
+body .streak-share > p { margin: 0; font-size: 12px; line-height: 1.65; color: var(--muted); }
+body .streak-share-preview { width: min(100%, 320px); margin: 0 auto; }
+body .streak-share-preview img { display: block; width: 100%; height: auto; border-radius: 16px; border: 1px solid var(--line); }
+body .streak-share-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: min(100%, 320px); margin: 0 auto; }
+
+body .streak-share-entry > button { display: inline-flex; flex: 0 0 auto; width: fit-content; max-width: 100%; min-height: 40px; padding: 10px 14px; border-radius: 7px; line-height: 1.4; white-space: normal; }
+body #accountSettingsStatus:empty { display: none; }
+body .help-card { display: flex; flex-direction: column; align-items: flex-start; }
+body .help-card > p { flex: 1; }
+body .help-card > .text-button { display: inline-flex; align-items: center; gap: 6px; margin-top: 18px; }
+body .help-card > .text-button svg { width: 14px; height: 14px; }
+
+body .streak-share-actions > button { width: 100%; min-width: 0; min-height: 44px; margin: 0; padding: 10px 12px; white-space: normal; line-height: 1.4; }

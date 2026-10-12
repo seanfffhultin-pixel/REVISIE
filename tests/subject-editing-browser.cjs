@@ -22,7 +22,7 @@ const root = path.resolve(__dirname, '..');
     await goto('subjects');
     await openSubjectOptions('biology');
     await page.locator('[data-subject-board="biology"]').click();
-    assert.equal(await page.locator('#subjectBoard').inputValue(), 'AQA');
+    assert.equal(await page.locator('#subjectBoard').inputValue(), '');
     await page.locator('#subjectBoard').fill('OCR');
     await page.locator('.modal [type="submit"]').click();
     assert.match(await page.locator('[data-subject-card="biology"]').innerText(), /OCR/);

@@ -1,14 +1,14 @@
 const subjectData = {
-  mathematics: { label: 'Mathematics', topic: 'Algebra and trigonometry', board: 'Pearson Edexcel', color: 'coral', icon: 'sigma', category: 'core', cards: [['What is the reciprocal of sin x?', 'cosec x'], ['What is the quadratic formula?', 'x = (-b ± √(b² - 4ac)) / 2a'], ['What is the Pythagorean identity?', 'sin²x + cos²x = 1']] },
-  english: { label: 'English', topic: 'Language and Literature', board: 'AQA', color: 'pink', icon: 'book-open', category: 'core', cards: [['What is a semantic field?', 'A group of words related by meaning.'], ['What should an analytical paragraph explain?', 'How a writer’s choice creates a specific effect and meaning.'], ['What is a thesis statement?', 'A clear central argument that guides an essay.']] },
-  biology: { label: 'Biology', topic: 'Cell biology', board: 'AQA', color: 'green', icon: 'leaf', category: 'science', cards: [['What is the role of the cell membrane?', 'It controls what enters and leaves the cell.'], ['Where does aerobic respiration happen?', 'In the mitochondria.'], ['What is osmosis?', 'The net movement of water across a partially permeable membrane.']] },
-  chemistry: { label: 'Chemistry', topic: 'Atomic structure', board: 'AQA', color: 'yellow', icon: 'flask-conical', category: 'science', cards: [['What is an isotope?', 'Atoms of the same element with different numbers of neutrons.'], ['What is oxidation?', 'Loss of electrons, or gain of oxygen.'], ['What is the relative charge of a proton?', '+1.']] },
-  physics: { label: 'Physics', topic: 'Energy and forces', board: 'AQA', color: 'blue', icon: 'atom', category: 'science', cards: [['What is the equation for kinetic energy?', 'Kinetic energy = ½ × mass × speed².'], ['What is the unit of force?', 'The newton (N).'], ['What does conservation of energy mean?', 'Energy cannot be created or destroyed, only transferred.']] },
-  german: { label: 'German', topic: 'Themes and communication', board: 'AQA', color: 'blue', icon: 'languages', category: 'language', cards: [['What is the German word for “because”?', 'weil'], ['What is the perfect tense used for?', 'Describing completed past actions.'], ['What is a modal verb?', 'A verb such as können, müssen, or wollen that changes the meaning of another verb.']] },
-  drama: { label: 'Drama', topic: 'Performance and theatre makers', board: 'AQA', color: 'pink', icon: 'drama', category: 'option', cards: [['What is proxemics?', 'The use of space and distance between performers.'], ['What is a still image?', 'A frozen picture used to communicate a moment or idea.'], ['What is an evaluation?', 'A reasoned judgement about the effectiveness of a performance choice.']] },
-  business: { label: 'Business', topic: 'Business activity and operations', board: 'Pearson Edexcel', color: 'yellow', icon: 'briefcase-business', category: 'option', cards: [['What is a stakeholder?', 'A person or group affected by a business.'], ['What is revenue?', 'The income from sales before costs are deducted.'], ['What is market segmentation?', 'Dividing a market into groups with similar needs or characteristics.']] },
-  citizenship: { label: 'Citizenship', topic: 'Politics and participation', board: 'Pearson Edexcel', color: 'green', icon: 'landmark', category: 'option', cards: [['What is representative democracy?', 'A system where citizens elect people to make decisions on their behalf.'], ['What is the rule of law?', 'The principle that everyone is subject to the law.'], ['How are source questions assessed?', 'By using evidence and explaining its relevance to the issue.']] },
-  'religious-studies': { label: 'Religious Studies', topic: 'Religion, philosophy and ethics', board: 'AQA', color: 'coral', icon: 'scale', category: 'core', cards: [['What is an ethical argument?', 'A reasoned claim about what is right or wrong.'], ['What is the problem of evil?', 'The challenge of explaining suffering if an all-powerful, all-loving God exists.'], ['What is religious pluralism?', 'The belief that different religions can offer valid paths or perspectives.']] },
+  mathematics: { label: 'Mathematics', topic: 'Algebra and trigonometry', board: 'Exam board', color: 'coral', icon: 'sigma', category: 'core', cards: [['What is the reciprocal of sin x?', 'cosec x'], ['What is the quadratic formula?', 'x = (-b ± √(b² - 4ac)) / 2a'], ['What is the Pythagorean identity?', 'sin²x + cos²x = 1']] },
+  english: { label: 'English', topic: 'Language and Literature', board: 'Exam board', color: 'pink', icon: 'book-open', category: 'core', cards: [['What is a semantic field?', 'A group of words related by meaning.'], ['What should an analytical paragraph explain?', 'How a writer’s choice creates a specific effect and meaning.'], ['What is a thesis statement?', 'A clear central argument that guides an essay.']] },
+  biology: { label: 'Biology', topic: 'Cell biology', board: 'Exam board', color: 'green', icon: 'leaf', category: 'science', cards: [['What is the role of the cell membrane?', 'It controls what enters and leaves the cell.'], ['Where does aerobic respiration happen?', 'In the mitochondria.'], ['What is osmosis?', 'The net movement of water across a partially permeable membrane.']] },
+  chemistry: { label: 'Chemistry', topic: 'Atomic structure', board: 'Exam board', color: 'yellow', icon: 'flask-conical', category: 'science', cards: [['What is an isotope?', 'Atoms of the same element with different numbers of neutrons.'], ['What is oxidation?', 'Loss of electrons, or gain of oxygen.'], ['What is the relative charge of a proton?', '+1.']] },
+  physics: { label: 'Physics', topic: 'Energy and forces', board: 'Exam board', color: 'blue', icon: 'atom', category: 'science', cards: [['What is the equation for kinetic energy?', 'Kinetic energy = ½ × mass × speed².'], ['What is the unit of force?', 'The newton (N).'], ['What does conservation of energy mean?', 'Energy cannot be created or destroyed, only transferred.']] },
+  german: { label: 'German', topic: 'Themes and communication', board: 'Exam board', color: 'blue', icon: 'languages', category: 'language', cards: [['What is the German word for “because”?', 'weil'], ['What is the perfect tense used for?', 'Describing completed past actions.'], ['What is a modal verb?', 'A verb such as können, müssen, or wollen that changes the meaning of another verb.']] },
+  drama: { label: 'Drama', topic: 'Performance and theatre makers', board: 'Exam board', color: 'pink', icon: 'drama', category: 'option', cards: [['What is proxemics?', 'The use of space and distance between performers.'], ['What is a still image?', 'A frozen picture used to communicate a moment or idea.'], ['What is an evaluation?', 'A reasoned judgement about the effectiveness of a performance choice.']] },
+  business: { label: 'Business', topic: 'Business activity and operations', board: 'Exam board', color: 'yellow', icon: 'briefcase-business', category: 'option', cards: [['What is a stakeholder?', 'A person or group affected by a business.'], ['What is revenue?', 'The income from sales before costs are deducted.'], ['What is market segmentation?', 'Dividing a market into groups with similar needs or characteristics.']] },
+  citizenship: { label: 'Citizenship', topic: 'Politics and participation', board: 'Exam board', color: 'green', icon: 'landmark', category: 'option', cards: [['What is representative democracy?', 'A system where citizens elect people to make decisions on their behalf.'], ['What is the rule of law?', 'The principle that everyone is subject to the law.'], ['How are source questions assessed?', 'By using evidence and explaining its relevance to the issue.']] },
+  'religious-studies': { label: 'Religious Studies', topic: 'Religion, philosophy and ethics', board: 'Exam board', color: 'coral', icon: 'scale', category: 'core', cards: [['What is an ethical argument?', 'A reasoned claim about what is right or wrong.'], ['What is the problem of evil?', 'The challenge of explaining suffering if an all-powerful, all-loving God exists.'], ['What is religious pluralism?', 'The belief that different religions can offer valid paths or perspectives.']] },
 };
 
 const builtInSubjectKeys = new Set(Object.keys(subjectData));
@@ -311,7 +311,7 @@ const resourceLibrary = JSON.parse(localStorage.getItem('revisie-resources') || 
 let resourceDatabasePromise;
 const customTopics = JSON.parse(localStorage.getItem('revisie-topics') || '{}');
 const customSubjectName = new URLSearchParams(location.search).get('name');
-if (customSubjectName) { currentSubject = customSubjectName.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!subjectData[currentSubject]) subjectData[currentSubject] = { label: customSubjectName, topic: 'My topic', board: 'Personal deck', cards: [['What do you want to remember?', 'Add the answer in your notes, then turn it into a flashcard.']] }; }
+if (customSubjectName) { currentSubject = customSubjectName.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!subjectData[currentSubject]) subjectData[currentSubject] = { label: customSubjectName, topic: 'My topic', board: 'Exam board', cards: [['What do you want to remember?', 'Add the answer in your notes, then turn it into a flashcard.']] }; }
 const subjectColourPalette = {
   coral: ['#faeee8', '#cd6048'], green: ['#e5f2e4', '#4f8955'], yellow: ['#fff4d5', '#a37e2d'], blue: ['#e4f0f7', '#39718c'], pink: ['#f8e6e5', '#ad696d'], purple: ['#eee7f5', '#80619c'],
   red: ['#fbe7e6', '#b94e4a'], orange: ['#fff0df', '#b87533'], amber: ['#fbf1ce', '#9c781e'], lime: ['#eff4d7', '#7c8b36'], olive: ['#e9eddc', '#6e7f48'], teal: ['#e0f0e9', '#3d8571'], cyan: ['#def2f3', '#36818a'], sky: ['#e7f2fc', '#4d86b5'], indigo: ['#e9eafa', '#646bad'], violet: ['#f0e7fb', '#9167ba'], rose: ['#fbe8ef', '#b96884'], slate: ['#e9edf1', '#637587'], sand: ['#f3ede1', '#99815d'], graphite: ['#e8ebe9', '#58645d']
@@ -319,7 +319,7 @@ const subjectColourPalette = {
 const subjectColours = Object.keys(subjectColourPalette);
 const subjectSymbols = ['book-open', 'sigma', 'leaf', 'flask-conical', 'atom', 'landmark', 'brain', 'languages', 'globe', 'palette', 'music', 'calculator', 'code', 'briefcase-business', 'scale', 'heart', 'drama', 'lightbulb', 'pen-tool', 'microscope'];
 const defaultSubjectStyles = Object.fromEntries(Object.entries(subjectData).map(([key, subject]) => [key, { color: subject.color || 'blue', icon: subject.icon || 'book-open', emoji: '' }]));
-const defaultSubjectBoards = Object.fromEntries(Object.entries(subjectData).map(([key, subject]) => [key, subject.board || 'AQA']));
+const defaultSubjectBoards = Object.fromEntries(Object.entries(subjectData).map(([key, subject]) => [key, subject.board || 'Exam board']));
 function subjectEntries() { return Object.entries(subjectData).filter(([, subject]) => !subject.deleted); }
 function subjectEmoji(value) {
   if (typeof value !== 'string') return '';
@@ -372,7 +372,7 @@ function customiseSubject(subjectKey) {
 }
 function editSubjectBoard(subjectKey) {
   const subject = subjectData[subjectKey]; if (!subject || subject.deleted) return;
-  const backdrop = openModal(`${subject.label} exam board`, `<form class="notes-form"><label class="upload-label" for="subjectBoard">Exam board</label><input id="subjectBoard" class="note-title" list="examBoards" required maxlength="80" value="${escapeHtml(subject.board === 'Personal deck' ? '' : subject.board)}" placeholder="Choose or type an exam board"><datalist id="examBoards">${['AQA', 'Pearson Edexcel', 'OCR', 'WJEC', 'Eduqas', 'CCEA', 'Cambridge International', 'SQA'].map((board) => `<option value="${board}"></option>`).join('')}</datalist><button class="primary-button" type="submit">Save changes</button></form>`);
+  const backdrop = openModal(`${subject.label} exam board`, `<form class="notes-form"><label class="upload-label" for="subjectBoard">Exam board</label><input id="subjectBoard" class="note-title" list="examBoards" required maxlength="80" value="${escapeHtml(['Personal deck', 'Exam board'].includes(subject.board) ? '' : subject.board)}" placeholder="Choose or type an exam board"><datalist id="examBoards">${['AQA', 'Pearson Edexcel', 'OCR', 'WJEC', 'Eduqas', 'CCEA', 'Cambridge International', 'SQA'].map((board) => `<option value="${board}"></option>`).join('')}</datalist><button class="primary-button" type="submit">Save changes</button></form>`);
   const input = backdrop.querySelector('#subjectBoard');
   input.addEventListener('input', () => input.setCustomValidity(''));
   backdrop.querySelector('form').addEventListener('submit', (event) => {
@@ -426,7 +426,7 @@ function registerCustomSubjects() {
   Object.keys(subjectData).forEach((key) => { if (subjectData[key].category === 'custom' && !keys.has(key)) delete subjectData[key]; });
   customSubjects.forEach((subject) => {
     const key = subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    if (!builtInSubjectKeys.has(key)) subjectData[key] = { label: subject.name, topic: subject.topic || 'My topic', board: 'Personal deck', category: 'custom', ...subjectStyle(subject), cards: [] };
+    if (!builtInSubjectKeys.has(key)) subjectData[key] = { label: subject.name, topic: subject.topic || 'My topic', board: 'Exam board', category: 'custom', ...subjectStyle(subject), cards: [] };
   });
   const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
   const appearances = settings.subjectAppearance || {};
@@ -434,7 +434,7 @@ function registerCustomSubjects() {
     subject.deleted = (settings.deletedSubjects || []).includes(key);
     if (builtInSubjectKeys.has(key)) Object.assign(subject, defaultSubjectStyles[key]);
     if (appearances[key]) Object.assign(subject, subjectStyle(appearances[key]));
-    subject.board = settings.subjectBoards?.[key] || (builtInSubjectKeys.has(key) ? defaultSubjectBoards[key] : 'Personal deck');
+    subject.board = settings.subjectBoards?.[key] || (builtInSubjectKeys.has(key) ? defaultSubjectBoards[key] : 'Exam board');
   });
 }
 registerCustomSubjects();
@@ -1020,11 +1020,108 @@ function streakMarkup(state = streakState()) {
     const date = shiftStudyDate(monday, index); const done = days.has(date);
     const status = done ? 'Studied' : date > today ? 'Upcoming' : 'No study recorded';
     return `<div class="week-day${done ? ' done' : ''}${date === today ? ' today' : ''}${date > today ? ' upcoming' : ''}" aria-label="${label} ${date}: ${status}" ${date === today ? 'aria-current="date"' : ''}><span>${label}</span><i aria-hidden="true">${done ? '✓' : Number(date.slice(-2))}</i></div>`;
-  }).join('')}</div><p class="streak-week-note">${[...days].filter((day) => day >= monday && day <= shiftStudyDate(monday, 6)).length} of 7 study days</p></div></div><div class="streak-footer"><div class="streak-records"><span>Best streak<strong>${state.best} ${state.best === 1 ? 'day' : 'days'}</strong></span><span>Study days<strong>${state.total}</strong></span></div><div class="milestone"><div class="streak-milestone-label"><strong>Next milestone: ${milestone} days</strong><span>${state.current} / ${milestone}</span></div><progress class="streak-progress" max="${milestone}" value="${state.current}" aria-label="Progress to ${milestone} day streak"></progress><p>${milestone - state.current} more ${milestone - state.current === 1 ? 'day' : 'days'}. to reach this milestone.</p></div></div><details class="streak-details"><summary>How streaks work</summary><p>A flashcard review or a planner session completed today earns one study day. Days follow your local calendar. Missing a full day resets your current streak; your best stays saved.</p><p>${localStorage.getItem('revisie-account') ? 'Saved with your workspace.' : 'Saved in this browser. Sign in to sync across devices.'}</p></details></div>`;
+  }).join('')}</div><p class="streak-week-note">${[...days].filter((day) => day >= monday && day <= shiftStudyDate(monday, 6)).length} of 7 study days</p></div></div><div class="streak-footer"><div class="streak-records"><span>Best streak<strong>${state.best} ${state.best === 1 ? 'day' : 'days'}</strong></span><span>Study days<strong>${state.total}</strong></span></div><div class="milestone"><div class="streak-milestone-label"><strong>Next milestone: ${milestone} days</strong><span>${state.current} / ${milestone}</span></div><progress class="streak-progress" max="${milestone}" value="${state.current}" aria-label="Progress to ${milestone} day streak"></progress><p>${milestone - state.current} more ${milestone - state.current === 1 ? 'day' : 'days'}. to reach this milestone.</p></div></div><div class="streak-share-entry"><button class="secondary-button" type="button" data-action="share-streak" ${state.current ? '' : 'disabled'}>Share streak</button>${state.current ? '' : '<small>Start a streak to share your progress.</small>'}</div><details class="streak-details"><summary>How streaks work</summary><p>A flashcard review or a planner session completed today earns one study day. Days follow your local calendar. Missing a full day resets your current streak; your best stays saved.</p><p>${localStorage.getItem('revisie-account') ? 'Saved with your workspace.' : 'Saved in this browser. Sign in to sync across devices.'}</p></details></div>`;
 }
 function openStreak() {
   const backdrop = openModal('Your study streak', streakMarkup());
   backdrop.dataset.streakModal = 'true';
+}
+function streakShareCaption(state) {
+  return `${state.current}-day study streak on REVISIÉ.`;
+}
+async function drawStreakShareCard(state, today = studyDate()) {
+  const logo = new Image();
+  await new Promise((resolve, reject) => {
+    logo.onload = resolve;
+    logo.onerror = () => reject(new Error('Could not load the REVISIÉ logo. Please try again.'));
+    logo.src = new URL('assets/revisie-logo.png?v=2', location.href).href;
+  });
+  const canvas = document.createElement('canvas'); canvas.width = 1080; canvas.height = 1350;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Your browser could not create the streak card.');
+  const text = (value, y, size, color = '#173d35', weight = 700) => {
+    ctx.fillStyle = color; ctx.font = `${weight} ${size}px sans-serif`; ctx.textAlign = 'center';
+    ctx.fillText(value, 540, y, 920);
+  };
+  ctx.fillStyle = '#f5f5e9'; ctx.fillRect(0, 0, 1080, 1350);
+  const logoWidth = 420; const logoHeight = logoWidth * logo.naturalHeight / logo.naturalWidth;
+  ctx.drawImage(logo, (1080 - logoWidth) / 2, 80, logoWidth, logoHeight);
+  ctx.strokeStyle = '#dfe4d4'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(100, 360); ctx.lineTo(980, 360); ctx.stroke();
+  text('Study streak', 445, 32, '#557469', 400);
+  const countSize = state.current > 999 ? 180 : 230;
+  ctx.font = `700 ${countSize}px sans-serif`;
+  const countWidth = Math.min(ctx.measureText(String(state.current)).width, 740);
+  const flameWidth = 126, flameGap = 38;
+  const groupLeft = (1080 - countWidth - flameWidth - flameGap) / 2;
+  ctx.save(); ctx.translate(groupLeft, 514); ctx.scale(1.26, 1.26);
+  const fire = ctx.createLinearGradient(50, 0, 50, 140);
+  fire.addColorStop(0, '#ef9d45'); fire.addColorStop(0.55, '#df713c'); fire.addColorStop(1, '#bd5237');
+  ctx.fillStyle = fire; ctx.beginPath(); ctx.moveTo(54, 0);
+  ctx.bezierCurveTo(60, 28, 37, 43, 37, 64);
+  ctx.bezierCurveTo(37, 75, 42, 82, 48, 88);
+  ctx.bezierCurveTo(27, 83, 20, 67, 23, 49);
+  ctx.bezierCurveTo(8, 66, 0, 84, 0, 101);
+  ctx.bezierCurveTo(0, 126, 20, 142, 50, 142);
+  ctx.bezierCurveTo(80, 142, 100, 122, 100, 98);
+  ctx.bezierCurveTo(100, 70, 73, 48, 54, 0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#f7ce7e'; ctx.beginPath(); ctx.moveTo(55, 89);
+  ctx.bezierCurveTo(55, 105, 35, 111, 35, 123);
+  ctx.bezierCurveTo(35, 134, 43, 140, 52, 140);
+  ctx.bezierCurveTo(64, 140, 73, 131, 73, 121);
+  ctx.bezierCurveTo(73, 109, 62, 103, 55, 89); ctx.closePath(); ctx.fill(); ctx.restore();
+  ctx.fillStyle = '#173d35'; ctx.font = `700 ${countSize}px sans-serif`; ctx.textAlign = 'center';
+  ctx.fillText(String(state.current), groupLeft + flameWidth + flameGap + countWidth / 2, 690, 740);
+  text(state.current === 1 ? 'day' : 'days', 765, 38, '#557469', 400);
+  text('THIS WEEK', 890, 20, '#557469');
+  const monday = shiftStudyDate(today, -(new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7);
+  const days = new Set(state.days);
+  ['M', 'T', 'W', 'T', 'F', 'S', 'S'].forEach((label, index) => {
+    const x = 228 + index * 104; const done = days.has(shiftStudyDate(monday, index));
+    ctx.fillStyle = done ? '#173d35' : '#dfe4d4'; ctx.beginPath(); ctx.arc(x, 978, 35, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = done ? '#f5f5e9' : '#718275'; ctx.font = '700 24px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, x, 986);
+    if (done) { ctx.strokeStyle = '#dce9a1'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x - 9, 1030); ctx.lineTo(x - 2, 1037); ctx.lineTo(x + 12, 1022); ctx.stroke(); }
+  });
+  text(`PERSONAL BEST: ${state.best} ${state.best === 1 ? 'DAY' : 'DAYS'}`, 1190, 25);
+  const dateLabel = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${today}T12:00:00Z`));
+  text(dateLabel, 1260, 22, '#557469', 400);
+  return canvas;
+}
+function downloadStreakCard(file) {
+  const url = URL.createObjectURL(file); const link = document.createElement('a');
+  link.href = url; link.download = file.name; document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function shareStreakCard(file, caption, status) {
+  try {
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'My REVISIÉ study streak', text: caption });
+      status.textContent = 'Streak shared!';
+    } else {
+      downloadStreakCard(file); status.textContent = 'Card downloaded. Add it to a message or story to share your streak.';
+    }
+  } catch (error) {
+    if (error.name !== 'AbortError') status.textContent = 'Sharing was unavailable. Use Download card to save and share it.';
+  }
+}
+async function openStreakShare() {
+  const state = streakState();
+  if (!state.current) { notify('Complete a study session to start a streak you can share.'); return; }
+  const backdrop = openModal('Share your streak', `<div class="streak-share"><p>Share or download your streak card.</p><div id="streakSharePreview" class="streak-share-preview" aria-busy="true"></div><p id="streakShareStatus" role="status">Creating your card…</p><div class="streak-share-actions"><button type="button" class="primary-button" id="shareStreakCard" disabled>Share card</button><button type="button" class="secondary-button" id="downloadStreakCard" disabled>Download card</button></div></div>`);
+  const status = backdrop.querySelector('#streakShareStatus'); const preview = backdrop.querySelector('#streakSharePreview');
+  try {
+    const canvas = await drawStreakShareCard(state);
+    const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value?.size ? resolve(value) : reject(new Error('Could not create your card. Please try again.')), 'image/png'));
+    if (!backdrop.isConnected) return;
+    const file = new File([blob], `revisie-${state.current}-day-streak.png`, { type: 'image/png' });
+    const image = document.createElement('img'); image.src = canvas.toDataURL('image/png'); image.alt = `${state.current}-day study streak on REVISIÉ. Personal best: ${state.best} days. Study activity this week.`; preview.appendChild(image);
+    const share = backdrop.querySelector('#shareStreakCard'); const download = backdrop.querySelector('#downloadStreakCard');
+    share.disabled = false; download.disabled = false; status.textContent = '';
+    // The card is ready before this click so native sharing retains user activation.
+    share.addEventListener('click', async () => { share.disabled = true; try { await shareStreakCard(file, streakShareCaption(state), status); } finally { share.disabled = false; } });
+    download.addEventListener('click', () => { downloadStreakCard(file); status.textContent = 'Streak card downloaded.'; });
+  } catch (error) { status.textContent = error.message || 'Could not create your streak card. Please try again.'; }
+  finally { preview.setAttribute('aria-busy', 'false'); }
 }
 function refreshStreakSurfaces() {
   const state = streakState();
@@ -1122,6 +1219,7 @@ function setupSettingsPage() {
     ['revisie-subjects', 'revisie-flashcards', 'revisie-note-library', 'revisie-notes', 'revisie-note-title', 'revisie-resources', 'revisie-plan', 'revisie-flashcard-drafts', 'revisie-card-destination'].forEach((key) => removeWorkspaceItem(key));
     notify('Personal data reset. Built-in GCSE content is unchanged.');
   });
+  setupAccountSettings();
   if (settings.reduceMotion) document.documentElement.classList.add('reduce-motion');
 }
 function assistantResponse(input) { const value = input.value.trim(); if (!value) return; const lower = value.toLowerCase(); const subject = subjectData[currentSubject] || subjectData.mathematics; const notes = noteLibrary.filter((note) => note.subject === currentSubject).map((note) => note.body).join(' '); const deck = getDeck(currentSubject, getUnits(currentSubject)[0]?.name || ''); let answer = `For ${escapeHtml(subject.label)}, start with the key definition, then apply it to an unfamiliar example. Your current focus is ${subject.topic}.`; if (lower.includes('quiz') || lower.includes('test')) { const card = deck[Math.floor(Math.random() * deck.length)]; answer = `Quick quiz: ${escapeHtml(card[0])} Take a moment to answer from memory, then open the matching ${getUnits(currentSubject)[0]?.name || ''} deck to check it.`; } else if (lower.includes('summar')) answer = notes ? `Here is the beginning of your saved ${escapeHtml(subject.label)} note: ${notes.slice(0, 260)}${notes.length > 260 ? '...' : ''}` : `You do not have a saved ${escapeHtml(subject.label)} note yet. Add one from the Notes page and I can use it here.`; else if (lower.includes('explain') || lower.includes('help')) { const card = deck[0]; answer = `${escapeHtml(card[0])} Answer: ${escapeHtml(card[1])} Next, try explaining that answer without looking.`; } const panel = document.querySelector('.assistant-panel'); if (panel) { panel.querySelector('.assistant-answer')?.remove(); panel.insertAdjacentHTML('beforeend', `<div class="assistant-answer"><strong>${escapeHtml(subject.label)} study assistant</strong><br>${answer}</div>`); } input.value = ''; }
@@ -1344,7 +1442,107 @@ function setupPersonalAccount() {
   refreshStreakSurfaces();
   document.querySelectorAll('.activity-total').forEach((item) => item.remove());
 }
-function setupAccountRoute() { if (!location.pathname.endsWith('account.html')) return; const loginForm = document.getElementById('loginForm'); const signupForm = document.getElementById('signupForm'); if (!loginForm || !signupForm) return; const parameters = new URLSearchParams(location.search); const panels = document.querySelectorAll('[data-auth-panel]'); const tabs = document.querySelectorAll('[data-auth-mode]'); const setMode = (mode) => { panels.forEach((panel) => { panel.hidden = panel.dataset.authPanel !== mode; }); tabs.forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.authMode === mode))); history.replaceState(null, '', `account.html?mode=${mode}`); lucide.createIcons(); }; const requestedMode = parameters.get('mode'); setMode(requestedMode === 'signup' ? 'signup' : 'login'); tabs.forEach((tab) => tab.addEventListener('click', () => setMode(tab.dataset.authMode))); const account = JSON.parse(localStorage.getItem('revisie-account') || 'null'); if (account) document.getElementById('loginEmail').value = account.email || ''; if (parameters.get('confirmed') === '1') notify('Email confirmed — you can now log in.'); loginForm.addEventListener('submit', async (event) => { event.preventDefault(); const email = document.getElementById('loginEmail').value.trim(); const password = document.getElementById('loginPassword').value; const button = loginForm.querySelector('button'); button.disabled = true; button.textContent = 'Logging in…'; try { const client = await getSupabaseClient(); const { data, error } = await client.auth.signInWithPassword({ email, password }); if (error) throw error; const displayName = data.user?.user_metadata?.display_name || email.split('@')[0]; await restoreWorkspace(); saveWorkspaceItem('revisie-account', JSON.stringify({ id: data.user.id, name: displayName, email })); location.href = 'index.html'; } catch (error) { notify(error.message || 'Could not log in. Confirm your email first if this is a new account.'); } finally { button.disabled = false; button.innerHTML = `Log in ${icon('arrow-right')}`; lucide.createIcons(); } }); signupForm.addEventListener('submit', async (event) => { event.preventDefault(); const name = document.getElementById('signupName').value.trim(); const email = document.getElementById('signupEmail').value.trim(); const password = document.getElementById('signupPassword').value; const confirmation = document.getElementById('signupPasswordConfirm').value; if (password !== confirmation) { notify('Passwords do not match.'); return; } const button = signupForm.querySelector('button'); button.disabled = true; button.textContent = 'Creating account…'; try { const client = await getSupabaseClient(); const emailRedirectTo = new URL('account.html?mode=login&confirmed=1', location.href).href; const { error } = await client.auth.signUp({ email, password, options: { emailRedirectTo, data: { display_name: name } } }); if (error) throw error; document.getElementById('loginEmail').value = email; signupForm.reset(); setMode('login'); notify('Account created. Check your email, confirm it, then log in.'); } catch (error) { notify(error.message || 'Could not create your account.'); } finally { button.disabled = false; button.innerHTML = `Create account ${icon('mail')}`; lucide.createIcons(); } }); }
+function setupAccountRoute() { if (!location.pathname.endsWith('account.html')) return; const loginForm = document.getElementById('loginForm'); const signupForm = document.getElementById('signupForm'); if (!loginForm || !signupForm) return; const parameters = new URLSearchParams(location.search); const panels = document.querySelectorAll('[data-auth-panel]'); const tabs = document.querySelectorAll('[data-auth-mode]'); const setMode = (mode) => { panels.forEach((panel) => { panel.hidden = panel.dataset.authPanel !== mode; }); tabs.forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.authMode === mode))); history.replaceState(null, '', `account.html?mode=${mode}${location.hash}`); lucide.createIcons(); }; const requestedMode = parameters.get('mode'); setMode(['signup', 'forgot', 'recovery'].includes(requestedMode) ? requestedMode : 'login'); setupPasswordRecovery(setMode); tabs.forEach((tab) => tab.addEventListener('click', () => setMode(tab.dataset.authMode))); const account = JSON.parse(localStorage.getItem('revisie-account') || 'null'); if (account) document.getElementById('loginEmail').value = account.email || ''; if (parameters.get('deleted') === '1') notify('Your account and saved data have been deleted.'); if (parameters.get('confirmed') === '1') notify('Email confirmed — you can now log in.'); loginForm.addEventListener('submit', async (event) => { event.preventDefault(); const email = document.getElementById('loginEmail').value.trim(); const password = document.getElementById('loginPassword').value; const button = loginForm.querySelector('button'); button.disabled = true; button.textContent = 'Logging in…'; try { const client = await getSupabaseClient(); const { data, error } = await client.auth.signInWithPassword({ email, password }); if (error) throw error; const displayName = data.user?.user_metadata?.display_name || email.split('@')[0]; await restoreWorkspace(); saveWorkspaceItem('revisie-account', JSON.stringify({ id: data.user.id, name: displayName, email })); location.href = 'index.html'; } catch (error) { notify(error.message || 'Could not log in. Confirm your email first if this is a new account.'); } finally { button.disabled = false; button.innerHTML = `Log in ${icon('arrow-right')}`; lucide.createIcons(); } }); signupForm.addEventListener('submit', async (event) => { event.preventDefault(); const name = document.getElementById('signupName').value.trim(); const email = document.getElementById('signupEmail').value.trim(); const password = document.getElementById('signupPassword').value; const confirmation = document.getElementById('signupPasswordConfirm').value; if (password !== confirmation) { notify('Passwords do not match.'); return; } const button = signupForm.querySelector('button'); button.disabled = true; button.textContent = 'Creating account…'; try { const client = await getSupabaseClient(); const emailRedirectTo = new URL('account.html?mode=login&confirmed=1', location.href).href; const { error } = await client.auth.signUp({ email, password, options: { emailRedirectTo, data: { display_name: name } } }); if (error) throw error; document.getElementById('loginEmail').value = email; signupForm.reset(); setMode('login'); notify('Account created. Check your email, confirm it, then log in.'); } catch (error) { notify(error.message || 'Could not create your account.'); } finally { button.disabled = false; button.innerHTML = `Create account ${icon('mail')}`; lucide.createIcons(); } }); }
+async function sendPasswordReset(email) {
+  const client = await getSupabaseClient();
+  const redirectTo = new URL('account.html?mode=recovery', location.href).href;
+  const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
+}
+function setupPasswordRecovery(setMode) {
+  const status = document.getElementById('recoveryStatus');
+  const recoveryForm = document.getElementById('recoveryForm');
+  const submit = recoveryForm.querySelector('[type="submit"]');
+  let recoveryReady = false;
+  document.getElementById('forgotPassword').addEventListener('click', () => {
+    document.getElementById('resetEmail').value = document.getElementById('loginEmail').value;
+    setMode('forgot');
+  });
+  document.querySelectorAll('[data-auth-back]').forEach(button => button.addEventListener('click', () => setMode('login')));
+  document.getElementById('resetPasswordForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('[type="submit"]');
+    button.disabled = true;
+    const message = document.getElementById('resetPasswordStatus');
+    message.textContent = 'Sending reset link…';
+    try {
+      await sendPasswordReset(document.getElementById('resetEmail').value.trim());
+      message.textContent = 'If an account exists for that email, a password reset link will arrive shortly. Check your spam folder too.';
+    } catch (error) { message.textContent = error.message || 'Could not send the reset email. Please try again.'; }
+    finally { button.disabled = false; }
+  });
+  const ready = () => { recoveryReady = true; submit.disabled = false; status.textContent = ''; setMode('recovery'); };
+  void (async () => {
+    try {
+      const client = await getSupabaseClient();
+      client.auth.onAuthStateChange(event => { if (event === 'PASSWORD_RECOVERY') ready(); });
+      // Wait for the SDK to exchange the email link before removing its URL tokens.
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      if (new URLSearchParams(location.search).get('mode') === 'recovery') {
+        history.replaceState(null, '', 'account.html?mode=recovery');
+        if (!data.session) throw new Error('This reset link has expired or is invalid. Request a new link.');
+        const { error: userError } = await client.auth.getUser();
+        if (userError) throw userError;
+        ready();
+      }
+    } catch { status.textContent = 'This reset link has expired or is invalid. Request a new link using Forgot password.'; }
+  })();
+  recoveryForm.addEventListener('submit', async event => {
+    event.preventDefault(); if (!recoveryReady || submit.disabled) return;
+    const password = document.getElementById('newPassword').value;
+    if (password !== document.getElementById('newPasswordConfirm').value) { status.textContent = 'Passwords do not match.'; return; }
+    submit.disabled = true; status.textContent = 'Updating password…';
+    try {
+      const client = await getSupabaseClient();
+      const { error } = await client.auth.updateUser({ password });
+      if (error) throw error;
+      await client.auth.signOut({ scope: 'local' });
+      nativeLocalStorageRemoveItem('revisie-account');
+      recoveryReady = false; recoveryForm.reset(); setMode('login');
+      notify('Password updated. Log in with your new password.');
+    } catch (error) { status.textContent = error.message || 'Could not update your password.'; }
+    finally { submit.disabled = !recoveryReady; }
+  });
+}
+function setupAccountSettings() {
+  const status = document.getElementById('accountSettingsStatus');
+  document.getElementById('settingsPasswordReset').addEventListener('click', async event => {
+    const button = event.currentTarget; button.disabled = true;
+    try {
+      const client = await getSupabaseClient();
+      const { data: { user }, error } = await client.auth.getUser();
+      if (error || !user?.email) throw new Error('Log in to reset your password, or use Forgot password on the login screen.');
+      await sendPasswordReset(user.email);
+      status.textContent = 'Password reset email sent. Check your inbox and spam folder.';
+    } catch (error) { status.textContent = error.message || 'Could not send the reset email.'; }
+    finally { button.disabled = false; }
+  });
+  document.getElementById('deleteAccount').addEventListener('click', () => {
+    const backdrop = openModal('Delete your account?', `<p>This permanently deletes your account, saved workspace, uploaded files and share links. This cannot be undone.</p><form class="notes-form"><label>Current password<input class="note-title" id="deleteAccountPassword" type="password" required autocomplete="current-password"></label><p>Forgot your password? Reset it from Settings first.</p><label>Type DELETE to confirm<input class="note-title" id="deleteAccountConfirm" required pattern="DELETE" autocomplete="off"></label><p id="deleteAccountStatus" role="status"></p><button class="danger-button" type="submit">Permanently delete account</button></form>`);
+    backdrop.querySelector('form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = event.currentTarget.querySelector('[type="submit"]'); if (button.disabled) return;
+      button.disabled = true;
+      const message = backdrop.querySelector('#deleteAccountStatus'); message.textContent = 'Deleting account…';
+      try {
+        const client = await getSupabaseClient();
+        const { data: { user }, error: userError } = await client.auth.getUser();
+        if (userError || !user) throw new Error('Log in before deleting your account.');
+        const { data, error } = await client.functions.invoke('delete-account', { body: { password: backdrop.querySelector('#deleteAccountPassword').value } });
+        if (error || !data?.deleted) throw new Error('Could not delete your account. Check your password and connection, then try again.');
+        clearTimeout(workspaceSyncTimer);
+        await workspaceSyncChain;
+        await client.auth.signOut({ scope: 'local' }).catch(() => {});
+        clearWorkspaceCache();
+        for (let index = localStorage.length - 1; index >= 0; index--) {
+          const key = localStorage.key(index); if (key?.startsWith('revisie-')) nativeLocalStorageRemoveItem(key);
+        }
+        location.href = 'account.html?deleted=1';
+      } catch (error) { message.textContent = error.message || 'Could not delete your account. Please try again.'; button.disabled = false; }
+    });
+  });
+}
 function dueCards() { return Object.fromEntries(Object.entries(JSON.parse(localStorage.getItem('revisie-due') || '{}')).filter(([key]) => subjectData[key] && !subjectData[key].deleted)); }
 function revisionStats(today = studyDate()) {
   const progress = topicProgress();
@@ -1455,3 +1653,5 @@ document.addEventListener('toggle', (event) => {
   const bottom = Math.min(window.innerHeight - 12, boundary ? boundary.bottom - 8 : Infinity);
   if (rect.bottom > bottom) menu.classList.add('opens-up');
 }, true);
+
+document.addEventListener('click', (event) => { if (event.target.closest('[data-action="share-streak"]')) void openStreakShare(); });
