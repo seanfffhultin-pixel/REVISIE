@@ -267,6 +267,7 @@ function clearWorkspaceCache() {
   [workspaceTimestampKey, workspacePendingKey, workspaceMigrationKey, 'revisie-flashcard-drafts', 'revisie-card-destination'].forEach((key) => nativeLocalStorageRemoveItem(key));
 }
 function refreshWorkspaceMemory() {
+  window.revisieTheme?.apply();
   for (const [key, target] of [['revisie-flashcards', userCards], ['revisie-subjects', customSubjects], ['revisie-note-library', noteLibrary], ['revisie-resources', resourceLibrary]]) {
     target.splice(0, target.length, ...JSON.parse(localStorage.getItem(key) || '[]'));
   }
@@ -1284,6 +1285,8 @@ function setupSettingsPage() {
   const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
   const name = document.getElementById('displayName'); if (!name) return;
   const motion = document.getElementById('reduceMotion');
+  const appearance = document.getElementById('appearance');
+  appearance.value = ['light', 'dark'].includes(settings.theme) ? settings.theme : 'system';
   name.value = settings.name || JSON.parse(localStorage.getItem('revisie-account') || 'null')?.name || '';
   motion.checked = Boolean(settings.reduceMotion);
   const form = document.getElementById('settingsForm'); const save = form.querySelector('[type="submit"]');
@@ -1308,7 +1311,8 @@ function setupSettingsPage() {
     try {
       const current = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
       delete current.subject; delete current.minutes;
-      saveWorkspaceItem('revisie-settings', JSON.stringify({ ...current, name: name.value.trim(), reduceMotion: motion.checked, profilePhoto: stagedPhoto }));
+      saveWorkspaceItem('revisie-settings', JSON.stringify({ ...current, name: name.value.trim(), reduceMotion: motion.checked, theme: appearance.value, profilePhoto: stagedPhoto }));
+      window.revisieTheme?.apply();
       document.documentElement.classList.toggle('reduce-motion', motion.checked); renderProfile(); status.textContent = ''; notify('Settings saved.');
     } catch { notify('Could not save settings. Free some browser storage and try again.'); }
   });
