@@ -1292,6 +1292,16 @@ function refreshStreakSurfaces() {
   setupProgressRoute();
 }
 function profilePhoto(value) { return typeof value === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value) ? value : ''; }
+function renderGreeting() {
+  const greeting = document.getElementById('overviewGreeting');
+  if (!greeting) return;
+  const hour = new Date().getHours();
+  const period = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+  const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
+  const account = JSON.parse(localStorage.getItem('revisie-account') || 'null');
+  const name = settings.name || account?.name || 'Guest';
+  greeting.innerHTML = name === 'Guest' ? `Good ${period}.` : `Good ${period}, <em>${escapeHtml(name)}.</em>`;
+}
 function renderProfile() {
   const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
   const account = JSON.parse(localStorage.getItem('revisie-account') || 'null');
@@ -1301,8 +1311,7 @@ function renderProfile() {
     avatar.textContent = name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
     if (photo) { const image = document.createElement('img'); image.src = photo; image.alt = `${name}'s profile picture`; avatar.replaceChildren(image); }
   });
-  const greeting = document.getElementById('overviewGreeting');
-  if (greeting && name !== 'Guest') greeting.innerHTML = `Good morning, <em>${escapeHtml(name)}.</em>`;
+  renderGreeting();
   const workspace = document.querySelector('.workspace-switcher strong');
   if (workspace) workspace.textContent = name === 'Guest' ? 'Guest workspace' : name;
 }
@@ -1580,8 +1589,6 @@ document.head.appendChild(quickToolsStyles);
 
 const revisieAccount = JSON.parse(localStorage.getItem('revisie-account') || 'null');
 function setupPersonalAccount() {
-  const greeting = document.getElementById('overviewGreeting');
-  if (greeting && revisieAccount?.name) greeting.innerHTML = `Good morning, <em>${escapeHtml(revisieAccount.name)}.</em>`;
   document.querySelectorAll('.avatar').forEach((avatar) => { const name = revisieAccount?.name || 'Guest'; avatar.textContent = name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(); });
   const switcher = document.querySelector('.workspace-switcher');
   if (switcher) { switcher.querySelector('strong')?.replaceChildren(document.createTextNode(revisieAccount?.name || 'Guest workspace')); switcher.querySelector('small')?.replaceChildren(document.createTextNode(revisieAccount ? 'Personal Study Workspace' : 'Sign in to save work')); switcher.setAttribute('role', 'button'); switcher.setAttribute('tabindex', '0'); switcher.setAttribute('aria-label', 'Open account'); switcher.onclick = () => { location.href = 'account.html'; }; switcher.onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); switcher.click(); } }; }
@@ -1767,6 +1774,10 @@ setupSubjectAppearanceButtons(); lucide.createIcons(); setupPersonalAccount(); s
 
 // Recalculate after midnight, returning to a tab, or activity in another tab.
 setInterval(refreshStreakSurfaces, 60000);
+setInterval(renderGreeting, 60000);
+window.addEventListener('focus', renderGreeting);
+window.addEventListener('pageshow', renderGreeting);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renderGreeting(); });
 window.addEventListener('focus', refreshStreakSurfaces);
 window.addEventListener('storage', (event) => { if (event.key === 'revisie-streak' || event.key === null) refreshStreakSurfaces(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshStreakSurfaces(); });
