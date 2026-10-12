@@ -1,6 +1,5 @@
 // Folder contents are references to existing material, never copied study data.
 (() => {
-  const colors = { green: 'Green', blue: 'Blue', coral: 'Coral', purple: 'Purple', yellow: 'Yellow', pink: 'Pink' };
   const folderUrl = id => `folders.html?id=${encodeURIComponent(id)}`;
   const currentFolder = id => folderRecords().find(folder => folder.id === id);
   const symbol = type => type === 'deck' ? 'layers-3' : type === 'note' ? 'notebook-pen' : 'file-text';
@@ -36,7 +35,7 @@
   function editFolder(id = null, initialItem = null) {
     const existing = id ? currentFolder(id) : null;
     if (id && !existing) { notify('This folder is no longer available.'); return; }
-    const backdrop = openModal(existing ? 'Edit folder' : 'New folder', `<form class="notes-form"><label class="upload-label" for="folderName">Folder name</label><input class="note-title" id="folderName" required maxlength="80" placeholder="e.g. Biology mock" value="${escapeHtml(existing?.name || '')}"><label class="upload-label" for="folderColor">Colour</label><select class="note-subject" id="folderColor">${Object.entries(colors).map(([color, label]) => `<option value="${color}" ${color === existing?.color ? 'selected' : ''}>${label}</option>`).join('')}</select><button class="primary-button" type="submit">${existing ? 'Save changes' : 'Create folder'} ${icon('check')}</button></form>`);
+    const backdrop = openModal(existing ? 'Edit folder' : 'New folder', `<form class="notes-form"><label class="upload-label" for="folderName">Folder name</label><input class="note-title" id="folderName" required maxlength="80" placeholder="e.g. Biology mock" value="${escapeHtml(existing?.name || '')}"><div class="subject-appearance-fields"><fieldset><legend>Colour</legend><div class="subject-colour-options">${subjectColours.map(color => `<label title="${color}"><input class="choice-input" type="radio" name="folderColor" value="${color}" ${color === (existing?.color || 'green') ? 'checked' : ''}><span class="colour-swatch ${color}"><span class="sr-only">${color}</span></span></label>`).join('')}</div></fieldset><div class="subject-appearance-preview"><div class="subject-icon ${existing?.color || 'green'}">${icon('folder')}</div><span>Preview</span></div></div><button class="primary-button" type="submit">${existing ? 'Save changes' : 'Create folder'} ${icon('check')}</button></form>`);
     backdrop.querySelector('form').addEventListener('submit', event => {
       event.preventDefault();
       const input = backdrop.querySelector('#folderName'), name = input.value.trim();
@@ -44,12 +43,15 @@
       const folders = folderRecords();
       const folder = id ? folders.find(folder => folder.id === id) : { id: crypto.randomUUID(), items: initialItem ? [initialItem] : [] };
       if (!folder) { closeModal(); notify('This folder was deleted on another device.'); return; }
-      const color = backdrop.querySelector('#folderColor').value;
+      const color = backdrop.querySelector('[name="folderColor"]:checked').value;
       Object.assign(folder, { name: existing && name === existing.name ? folder.name : name, color: existing && color === existing.color ? folder.color : color });
       if (!id) folders.unshift(folder);
       if (save(folders)) { closeModal(); focusFolder(folder.id); notify(initialItem ? 'Folder created and material added.' : existing ? 'Folder updated.' : 'Folder created.'); }
     });
     backdrop.querySelector('#folderName').addEventListener('input', event => event.target.setCustomValidity(''));
+    backdrop.querySelector('form').addEventListener('change', event => {
+      if (event.target.name === 'folderColor') backdrop.querySelector('.subject-appearance-preview .subject-icon').className = `subject-icon ${event.target.value}`;
+    });
   }
   function deleteFolder(id) {
     const folder = currentFolder(id); if (!folder) return;
@@ -193,12 +195,12 @@
     } else if (!folder) {
       app.innerHTML = `<div class="folders-toolbar"><p>${folders.length} ${folders.length === 1 ? 'folder' : 'folders'}</p><button class="primary-button" id="newFolder">New folder ${icon('plus')}</button></div>${folders.length ? `<div class="folder-grid">${folders.map(folder => {
         const available = folder.items.map(resolve).filter(Boolean), decks = available.filter(item => item.ref.type === 'deck').length;
-        return `<article class="folder-card"><a class="folder-card-link" href="${folderUrl(folder.id)}"><span class="subject-icon ${folder.color}">${icon('folder')}</span><h2>${escapeHtml(folder.name)}</h2><p>${available.length} ${available.length === 1 ? 'item' : 'items'} · ${decks} ${decks === 1 ? 'deck' : 'decks'}</p></a>${itemActions(`Options for ${folder.name}`, itemAction('Rename or change colour', 'pencil', `data-edit-folder="${escapeHtml(folder.id)}"`) + itemAction('Delete folder', 'trash-2', `data-delete-folder="${escapeHtml(folder.id)}"`, true))}</article>`;
+        return `<article class="folder-card"><a class="folder-card-link" href="${folderUrl(folder.id)}"><span class="subject-icon ${folder.color}">${icon('folder')}</span><h2>${escapeHtml(folder.name)}</h2><p>${available.length} ${available.length === 1 ? 'item' : 'items'} · ${decks} ${decks === 1 ? 'deck' : 'decks'}</p></a>${itemActions(`Options for ${folder.name}`, itemAction('Customise folder', 'palette', `data-edit-folder="${escapeHtml(folder.id)}"`) + itemAction('Delete folder', 'trash-2', `data-delete-folder="${escapeHtml(folder.id)}"`, true))}</article>`;
       }).join('')}</div>` : '<div class="folder-empty"><div class="folder-empty-symbol">'+icon('folders')+'</div><h2>Your first folder</h2><p>Create a collection for a mock exam, a tricky topic or your next revision session. Add existing decks, notes and PDFs without copying them.</p></div>'}`;
       app.querySelector('#newFolder').addEventListener('click', () => editFolder());
     } else {
       const available = folder.items.map(resolve).filter(Boolean), count = reviewEntries(folder).length;
-      app.innerHTML = `<a class="text-button folder-back" href="folders.html">${icon('arrow-left')} All folders</a><section class="folder-heading"><span class="subject-icon ${folder.color}">${icon('folder')}</span><div><p class="eyebrow">FOLDER</p><h1>${escapeHtml(folder.name)}</h1><p>${available.length} items · ${count} flashcards</p></div>${itemActions(`Options for ${folder.name}`, itemAction('Rename or change colour', 'pencil', `data-edit-folder="${escapeHtml(folder.id)}"`) + itemAction('Delete folder', 'trash-2', `data-delete-folder="${escapeHtml(folder.id)}"`, true))}</section><div class="folder-page-actions"><button class="primary-button" id="addFolderMaterial">Add material ${icon('plus')}</button><button class="secondary-button" id="reviewFolder" ${count ? '' : 'disabled'}>Revise all flashcards ${icon('layers-3')}</button></div><div class="folder-content-list">${folder.items.length ? folder.items.map((ref, index) => {
+      app.innerHTML = `<a class="text-button folder-back" href="folders.html">${icon('arrow-left')} All folders</a><section class="folder-heading"><span class="subject-icon ${folder.color}">${icon('folder')}</span><div><p class="eyebrow">FOLDER</p><h1>${escapeHtml(folder.name)}</h1><p>${available.length} items · ${count} flashcards</p></div>${itemActions(`Options for ${folder.name}`, itemAction('Customise folder', 'palette', `data-edit-folder="${escapeHtml(folder.id)}"`) + itemAction('Delete folder', 'trash-2', `data-delete-folder="${escapeHtml(folder.id)}"`, true))}</section><div class="folder-page-actions"><button class="primary-button" id="addFolderMaterial">Add material ${icon('plus')}</button><button class="secondary-button" id="reviewFolder" ${count ? '' : 'disabled'}>Revise all flashcards ${icon('layers-3')}</button></div><div class="folder-content-list">${folder.items.length ? folder.items.map((ref, index) => {
         const item = resolve(ref);
         return `<article class="folder-content-row ${item ? '' : 'is-unavailable'}"><span class="folder-material-icon">${icon(symbol(ref.type))}</span><${item ? 'button type="button"' : 'div'} class="folder-content-open" ${item ? `data-open-folder-item="${index}"` : ''}><strong>${escapeHtml(item?.title || (ref.type === 'deck' ? ref.unit : `Unavailable ${typeLabel(ref.type).toLowerCase()}`))}</strong><small>${escapeHtml(item?.detail || 'The original material was deleted or is no longer available.')}</small></${item ? 'button' : 'div'}>${itemActions('Options for '+(item?.title || 'unavailable item'), itemAction('Remove from folder', 'folder-minus', `data-remove-folder-item="${index}"`))}</article>`;
       }).join('') : '<div class="folder-empty"><h2>Add your revision material</h2><p>Choose Add material to select decks, notes and PDFs from your workspace.</p></div>'}</div>`;

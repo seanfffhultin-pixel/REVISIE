@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../site.js'), 'utf8');
 const context = vm.createContext({ localStorage: { getItem: () => null } });
-vm.runInContext(source.slice(source.indexOf('function folderItemKey('), source.indexOf('function workspaceCardIdentity(')), context);
+vm.runInContext(source.slice(source.indexOf('const subjectColourPalette ='), source.indexOf('function workspaceCardIdentity(')), context);
 const deck = { type: 'deck', subject: 'biology', unit: 'Cells' };
 const note = { type: 'note', id: 'n1' }, pdf = { type: 'resource', id: 'r1' };
 const folder = (id, items = [], extra = {}) => ({ id, name: id, color: 'green', items, ...extra });
@@ -37,4 +37,10 @@ test('new folders from separate devices both survive an initially empty workspac
   assert.equal(merge([], [folder('phone')], [folder('laptop')]).length, 2);
   const result = JSON.parse(context.mergeWorkspaceFolders(null, JSON.stringify([folder('new')]), undefined));
   assert.equal(result.length, 1); assert.equal(result[0].id, 'new');
+});
+
+test('extended subject colours persist in folders and survive a device merge', () => {
+  const base = folder('a', [deck]);
+  const result = merge([base], [folder('a', [deck], { color: 'teal' })], [folder('a', [deck, note])]);
+  assert.equal(result[0].color, 'teal'); assert.deepEqual(result[0].items, [deck, note]);
 });

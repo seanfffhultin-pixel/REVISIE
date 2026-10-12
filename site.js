@@ -142,6 +142,11 @@ function calculateStreak(value, today = studyDate()) {
   const current = completedToday || lastDate === shiftStudyDate(today, -1) ? run : 0;
   return { days, lastDate, current, best, completedToday, total: days.length };
 }
+const subjectColourPalette = {
+  coral: ['#faeee8', '#cd6048'], green: ['#e5f2e4', '#4f8955'], yellow: ['#fff4d5', '#a37e2d'], blue: ['#e4f0f7', '#39718c'], pink: ['#f8e6e5', '#ad696d'], purple: ['#eee7f5', '#80619c'],
+  red: ['#fbe7e6', '#b94e4a'], orange: ['#fff0df', '#b87533'], amber: ['#fbf1ce', '#9c781e'], lime: ['#eff4d7', '#7c8b36'], olive: ['#e9eddc', '#6e7f48'], teal: ['#e0f0e9', '#3d8571'], cyan: ['#def2f3', '#36818a'], sky: ['#e7f2fc', '#4d86b5'], indigo: ['#e9eafa', '#646bad'], violet: ['#f0e7fb', '#9167ba'], rose: ['#fbe8ef', '#b96884'], slate: ['#e9edf1', '#637587'], sand: ['#f3ede1', '#99815d'], graphite: ['#e8ebe9', '#58645d']
+};
+const subjectColours = Object.keys(subjectColourPalette);
 function folderItemKey(item) {
   if (item?.type === 'deck' && typeof item.subject === 'string' && typeof item.unit === 'string') return JSON.stringify(['deck', item.subject, item.unit]);
   if (['note', 'resource'].includes(item?.type) && ['string', 'number'].includes(typeof item.id)) return JSON.stringify([item.type, String(item.id)]);
@@ -159,7 +164,7 @@ function folderRecords(value = localStorage.getItem('revisie-folders')) {
         const key = folderItemKey(item); if (!key) continue;
         items.set(key, item.type === 'deck' ? { type: 'deck', subject: item.subject, unit: item.unit } : { type: item.type, id: String(item.id) });
       }
-      folders.set(record.id, { id: record.id, name: record.name.trim().slice(0, 80), color: ['green', 'blue', 'coral', 'purple', 'yellow', 'pink'].includes(record.color) ? record.color : 'green', items: [...items.values()] });
+      folders.set(record.id, { id: record.id, name: record.name.trim().slice(0, 80), color: subjectColours.includes(record.color) ? record.color : 'green', items: [...items.values()] });
     }
     return [...folders.values()];
   } catch { return []; }
@@ -452,11 +457,6 @@ let resourceDatabasePromise;
 const customTopics = JSON.parse(localStorage.getItem('revisie-topics') || '{}');
 const customSubjectName = new URLSearchParams(location.search).get('name');
 if (customSubjectName) { currentSubject = customSubjectName.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!subjectData[currentSubject]) subjectData[currentSubject] = { label: customSubjectName, topic: 'My topic', board: 'Exam board', cards: [['What do you want to remember?', 'Add the answer in your notes, then turn it into a flashcard.']] }; }
-const subjectColourPalette = {
-  coral: ['#faeee8', '#cd6048'], green: ['#e5f2e4', '#4f8955'], yellow: ['#fff4d5', '#a37e2d'], blue: ['#e4f0f7', '#39718c'], pink: ['#f8e6e5', '#ad696d'], purple: ['#eee7f5', '#80619c'],
-  red: ['#fbe7e6', '#b94e4a'], orange: ['#fff0df', '#b87533'], amber: ['#fbf1ce', '#9c781e'], lime: ['#eff4d7', '#7c8b36'], olive: ['#e9eddc', '#6e7f48'], teal: ['#e0f0e9', '#3d8571'], cyan: ['#def2f3', '#36818a'], sky: ['#e7f2fc', '#4d86b5'], indigo: ['#e9eafa', '#646bad'], violet: ['#f0e7fb', '#9167ba'], rose: ['#fbe8ef', '#b96884'], slate: ['#e9edf1', '#637587'], sand: ['#f3ede1', '#99815d'], graphite: ['#e8ebe9', '#58645d']
-};
-const subjectColours = Object.keys(subjectColourPalette);
 const subjectSymbols = ['book-open', 'sigma', 'leaf', 'flask-conical', 'atom', 'landmark', 'brain', 'languages', 'globe', 'palette', 'music', 'calculator', 'code', 'briefcase-business', 'scale', 'heart', 'drama', 'lightbulb', 'pen-tool', 'microscope'];
 const defaultSubjectStyles = Object.fromEntries(Object.entries(subjectData).map(([key, subject]) => [key, { color: subject.color || 'blue', icon: subject.icon || 'book-open', emoji: '' }]));
 const defaultSubjectBoards = Object.fromEntries(Object.entries(subjectData).map(([key, subject]) => [key, subject.board || 'Exam board']));
