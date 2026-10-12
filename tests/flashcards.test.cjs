@@ -35,7 +35,7 @@ function harness(initial = {}, remoteCards = [], options = {}) {
   };
   const context = vm.createContext({ localStorage, crypto: webcrypto, console: { warn() {} }, setTimeout: () => 1, clearTimeout() {}, window: { addEventListener() {} }, document: { addEventListener() {} }, getSupabaseClient: async () => client, getDeck: () => [], getUnits: () => [{ name: 'Cells' }] });
   vm.runInContext(`
-    const syncedStorageKeys = ['revisie-flashcards','revisie-topics','revisie-note-library','revisie-streak','revisie-flashcard-study'];
+    const syncedStorageKeys = ['revisie-flashcards','revisie-topics','revisie-note-library','revisie-streak','revisie-flashcard-study','revisie-last-activity'];
     const notePhotoCache = new Map(); function storedNoteMetadata(note) { return note; }
     const workspaceTimestampKey = 'timestamp'; const workspaceOwnerKey = 'owner'; let workspaceSyncTimer;
     const nativeLocalStorageSetItem = localStorage.setItem.bind(localStorage);
@@ -175,4 +175,17 @@ test('workspace sync merges flashcard study time from different devices', async 
   assert.equal(await h.context.syncWorkspaceNow(), true);
   const merged = JSON.parse(h.remote.data[key]);
   assert.equal(merged.laptop.milliseconds, 120000); assert.equal(merged.phone.milliseconds, 300000); assert.equal(merged.shared.milliseconds, 180000);
+});
+
+test('workspace sync keeps the most recent activity across devices', async () => {
+  const h = harness(); const key = 'revisie-last-activity';
+  const remote = { type: 'review', subject: 'biology', unit: 'Cells', queue: [['Question', 'Answer']], known: 1, updatedAt: 200 };
+  h.remote.data[key] = JSON.stringify(remote);
+  h.context.saveWorkspaceItem(key, JSON.stringify({ type: 'page', page: 'planner', updatedAt: 100 }));
+  assert.equal(await h.context.syncWorkspaceNow(), true);
+  assert.deepEqual(JSON.parse(h.storage.get(key)), remote);
+  const newest = { type: 'note', id: 123, subject: 'english', updatedAt: 300 };
+  h.context.saveWorkspaceItem(key, JSON.stringify(newest));
+  assert.equal(await h.context.syncWorkspaceNow(), true);
+  assert.deepEqual(JSON.parse(h.remote.data[key]), newest);
 });

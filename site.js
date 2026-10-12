@@ -16,7 +16,7 @@ const SUPABASE_URL = 'https://ezlxermogoenqqecplev.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_iE62VbJU70uzxAB0IeXs-Q_QfJ9P_2c';
 const RESOURCE_BUCKET = 'workspace-files';
 const MAX_RESOURCE_FILE_SIZE = 25 * 1024 * 1024;
-const syncedStorageKeys = ['revisie-subjects', 'revisie-flashcards', 'revisie-note-library', 'revisie-resources', 'revisie-topics', 'revisie-topic-progress', 'revisie-subject-progress', 'revisie-starter-card-overrides', 'revisie-due', 'revisie-settings', 'revisie-planner-items', 'revisie-streak', 'revisie-flashcard-study'];
+const syncedStorageKeys = ['revisie-subjects', 'revisie-flashcards', 'revisie-note-library', 'revisie-resources', 'revisie-topics', 'revisie-topic-progress', 'revisie-subject-progress', 'revisie-starter-card-overrides', 'revisie-due', 'revisie-settings', 'revisie-planner-items', 'revisie-streak', 'revisie-flashcard-study', 'revisie-last-activity'];
 const workspaceTimestampKey = 'revisie-workspace-updated-at';
 const workspaceOwnerKey = 'revisie-workspace-owner-id';
 const nativeLocalStorageSetItem = localStorage.setItem.bind(localStorage);
@@ -165,6 +165,56 @@ function mergeWorkspaceTopics(baseValue, localValue, remoteValue) {
   }
   return JSON.stringify(result);
 }
+const lastActivityKey = 'revisie-last-activity';
+function readLastActivity(value = localStorage.getItem(lastActivityKey)) {
+  try { const activity = JSON.parse(value || 'null'); return activity && typeof activity === 'object' && typeof activity.type === 'string' && Number.isFinite(activity.updatedAt) ? activity : null; } catch { return null; }
+}
+function mergeWorkspaceActivity(baseValue, localValue, remoteValue) {
+  if (localValue == null || localValue === 'null') return localValue;
+  const local = readLastActivity(localValue), remote = readLastActivity(remoteValue);
+  return JSON.stringify(!local || remote && remote.updatedAt > local.updatedAt ? remote : local);
+}
+function rememberActivity(activity) {
+  const previous = readLastActivity();
+  saveWorkspaceItem(lastActivityKey, JSON.stringify({ ...activity, updatedAt: Math.max(Date.now(), (previous?.updatedAt || 0) + 1) }));
+  setupOverviewRoute();
+}
+function lastActivityDestination() {
+  const activity = readLastActivity(); if (!activity) return null;
+  const subject = subjectData[activity.subject];
+  if (activity.subject && (!subject || subject.deleted)) return null;
+  if (activity.type === 'review') {
+    const unit = getUnits(activity.subject).find(item => item.name === activity.unit);
+    if (!unit) return null;
+    const deck = getDeck(activity.subject, unit.name);
+    if (!deck.length) return null;
+    const available = new Map(deck.map(card => [JSON.stringify(card), card]));
+    const queue = Array.isArray(activity.queue) ? activity.queue.filter(card => available.has(JSON.stringify(card))).map(card => available.get(JSON.stringify(card))) : [];
+    const known = Math.max(0, Math.min(Number(activity.known) || 0, deck.length));
+    return { subject: subject.label, title: unit.name, detail: queue.length ? `${known} complete · ${queue.length} remaining` : 'Your last review is complete.', button: queue.length ? 'Resume review' : 'Review again', action: () => reviewCards(deck, `${subject.label} / ${unit.name}`, queue.length ? { queue, known } : null) };
+  }
+  if (activity.type === 'note') {
+    const note = noteLibrary.find(item => String(item.id) === String(activity.id));
+    if (!note || subjectData[note.subject]?.deleted) return null;
+    return { subject: subjectData[note.subject]?.label || 'Notes', title: note.title, detail: activity.editing ? 'Continue editing your note.' : 'Your last opened note.', button: activity.editing ? 'Edit note' : 'Open note', action: () => activity.editing ? openNotes(note.subject, note.id) : viewNote(note.id) };
+  }
+  if (activity.type === 'resource') {
+    const resource = resourceLibrary.find(item => String(item.id) === String(activity.id));
+    if (!resource) return null;
+    return { subject: subject?.label || 'Resources', title: resource.name, detail: 'Your last opened PDF.', button: 'Open PDF', action: () => void openResource(resource) };
+  }
+  if (activity.type === 'composer' && subject) {
+    if (activity.unit !== '__new__' && !getUnits(activity.subject).some(item => item.name === activity.unit)) return null;
+    return { subject: subject.label, title: activity.unit === '__new__' ? 'New flashcard topic' : activity.unit, detail: 'Continue creating flashcards. Any saved draft will reopen.', button: 'Continue creating', action: () => openCardComposer(activity.subject, activity.unit) };
+  }
+  if (activity.type === 'subject' && subject) return { subject: 'Subjects', title: subject.label, detail: 'Your last opened subject.', button: 'Open subject', action: () => { location.href = subjectRoute(activity.subject); } };
+  const pages = { planner: ['Revision planner', 'Your last opened planner.', 'planner.html'], notes: ['Notes', 'Return to your notes.', 'notes.html'] };
+  if (activity.type === 'page' && pages[activity.page]) {
+    const [title, detail, route] = pages[activity.page];
+    return { subject: 'Workspace', title, detail, button: `Open ${activity.page}`, action: () => { location.href = route; } };
+  }
+  return null;
+}
 const flashcardStudyKey = 'revisie-flashcard-study';
 let flashcardStudySession = null;
 let flashcardStudyTimer;
@@ -267,7 +317,7 @@ async function syncWorkspaceOnce() {
       const merged = { ...(remote?.data || {}) };
       for (const key of syncedStorageKeys) {
         if (pending[key]) {
-          const merge = key === 'revisie-flashcards' ? mergeWorkspaceCards : key === 'revisie-topics' ? mergeWorkspaceTopics : key === 'revisie-streak' ? mergeWorkspaceStreak : key === flashcardStudyKey ? mergeWorkspaceStudyTime : null;
+          const merge = key === 'revisie-flashcards' ? mergeWorkspaceCards : key === 'revisie-topics' ? mergeWorkspaceTopics : key === 'revisie-streak' ? mergeWorkspaceStreak : key === flashcardStudyKey ? mergeWorkspaceStudyTime : key === lastActivityKey ? mergeWorkspaceActivity : null;
           merged[key] = merge ? merge(pending[key].base, snapshot[key], remote?.data?.[key]) : snapshot[key];
         }
         else merged[key] = remote ? (remote.data?.[key] ?? null) : snapshot[key];
@@ -830,7 +880,7 @@ function openCardComposer(subjectKey = '', unitName = '') {
   try { previous = JSON.parse(localStorage.getItem('revisie-card-destination') || '{}'); } catch { previous = {}; }
   const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
   const isActive = (key) => subjectData[key] && !subjectData[key].deleted;
-  const initialSubject = isActive(subjectKey) ? subjectKey : isActive(previous?.subject) ? previous.subject : isActive(settings.subject) ? settings.subject : isActive(currentSubject) ? currentSubject : subjectEntries()[0][0];
+  const initialSubject = isActive(subjectKey) ? subjectKey : isActive(previous?.subject) ? previous.subject : isActive(currentSubject) ? currentSubject : subjectEntries()[0][0];
   const initialUnit = unitName || (previous?.subject === initialSubject ? previous.unit : '');
   const backdrop = openModal('Add flashcards', `<form class="notes-form card-composer" id="cardComposer"><div class="card-destination"><label for="cardSubject">Subject<select id="cardSubject" class="note-subject">${subjectEntries().map(([key, subject]) => `<option value="${key}" ${key === initialSubject ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`).join('')}</select></label><label for="cardUnit">Topic<select id="cardUnit" class="note-subject"></select></label></div><label class="new-card-topic" for="cardNewTopic" hidden>New topic<input id="cardNewTopic" class="note-title" placeholder="Topic name" maxlength="120"></label><div class="card-writing"><label for="cardQuestion">Question<textarea id="cardQuestion" required placeholder="What do you want to remember?"></textarea></label><label for="cardAnswer">Answer<textarea id="cardAnswer" required placeholder="Write the answer…"></textarea></label></div><p id="cardSaveStatus" class="card-save-status" role="status"></p><div class="card-composer-footer"><span class="card-draft-hint">Unfinished cards are kept as drafts.</span><div><button class="primary-button" type="submit" name="saveMode" value="another">Save & add another</button><button class="secondary-button" type="submit" name="saveMode" value="close">Save & close</button></div></div><p class="card-shortcut">⌘ / Ctrl + Enter to save and add another</p></form>`);
   backdrop.dataset.cardComposer = 'true';
@@ -838,7 +888,7 @@ function openCardComposer(subjectKey = '', unitName = '') {
   const question = backdrop.querySelector('#cardQuestion'); const answer = backdrop.querySelector('#cardAnswer'); const topic = backdrop.querySelector('#cardNewTopic'); const topicLabel = backdrop.querySelector('.new-card-topic'); const status = backdrop.querySelector('#cardSaveStatus');
   let activeSubject = initialSubject, activeUnit = '', added = 0;
   const draftKey = () => JSON.stringify([activeSubject, activeUnit]);
-  const rememberDestination = () => { try { saveWorkspaceItem('revisie-card-destination', JSON.stringify({ subject: activeSubject, unit: activeUnit })); } catch { /* Card saving still works if storage is full. */ } };
+  const rememberDestination = () => { try { saveWorkspaceItem('revisie-card-destination', JSON.stringify({ subject: activeSubject, unit: activeUnit })); rememberActivity({ type: 'composer', subject: activeSubject, unit: activeUnit }); } catch { /* Card saving still works if storage is full. */ } };
   const saveDraft = () => {
     try {
       const drafts = readCardDrafts();
@@ -987,10 +1037,11 @@ async function hydrateNotePhotosOnce() {
 function openNotes(subjectKey = currentSubject, noteId = null) {
   const existing = noteId === null ? null : noteLibrary.find((note) => note.id === noteId); const subjectOptions = subjectEntries().map(([key, subject]) => `<option value="${key}" ${key === subjectKey ? 'selected' : ''}>${escapeHtml(subject.label)}</option>`).join('');
   const backdrop = openModal(existing ? 'Edit note' : 'New note', `<form class="notes-form"><input id="noteTitle" class="note-title" required placeholder="Note title" value="${escapeHtml(existing?.title || '')}"><select id="noteSubject" class="note-subject">${subjectOptions}${customSubjects.map((subject) => `<option value="${subject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}">${escapeHtml(subject.name)}</option>`).join('')}</select><textarea id="notesText" placeholder="Capture an idea, summary, or question...">${escapeHtml(existing?.body || localStorage.getItem('revisie-notes') || '')}</textarea><label class="upload-label" for="noteImage">Add a photo of handwritten notes</label><input id="noteImage" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><img id="notePreview" class="note-preview" alt="Uploaded note preview" ${existing?.image ? `src="${escapeHtml(existing.image)}"` : 'hidden'}><button class="ocr-button" type="button" id="ocrButton">Extract text from photo</button><button class="primary-button" type="submit">Save note ${icon('check')}</button></form>`);
+  rememberActivity(existing ? { type: 'note', id: existing.id, subject: existing.subject, editing: true } : { type: 'page', page: 'notes' });
   const image = backdrop.querySelector('#noteImage'); const preview = backdrop.querySelector('#notePreview'); let photoFile = null;
   if (existing && hasNotePhoto(existing)) void hydrateNotePhotos().then(() => { if (!photoFile && backdrop.isConnected) { const current = noteLibrary.find((note) => note.id === existing.id); if (current?.image) { preview.src = current.image; preview.hidden = false; } } });
   image.addEventListener('change', () => { photoFile = image.files[0] || null; if (photoFile) { preview.src = URL.createObjectURL(photoFile); preview.hidden = false; } }); backdrop.querySelector('#ocrButton').addEventListener('click', () => runOcr(backdrop));
-  backdrop.querySelector('form').addEventListener('submit', async (event) => { event.preventDefault(); const id = existing?.id || Date.now(); const button = backdrop.querySelector('[type="submit"]'); button.disabled = true; button.textContent = 'Saving note…'; try { const imagePath = photoFile ? await uploadNotePhoto(photoFile, id) : (existing?.imagePath || ''); const note = { id, title: backdrop.querySelector('#noteTitle').value.trim(), subject: backdrop.querySelector('#noteSubject').value, body: backdrop.querySelector('#notesText').value.trim(), image: existing?.imagePath ? '' : (photoFile ? '' : (existing?.image || '')), imagePath, updatedAt: new Date().toISOString() }; const index = noteLibrary.findIndex((item) => item.id === note.id); if (index >= 0) noteLibrary[index] = note; else noteLibrary.unshift(note); saveWorkspaceItem('revisie-note-library', JSON.stringify(noteLibrary)); saveWorkspaceItem('revisie-notes', note.body); await syncWorkspaceNow(); await hydrateNotePhotos(); closeModal(); renderNoteSurfaces(); notify('Note saved to your library.'); } catch (error) { notify(error.message || 'This note photo could not be saved. Run the storage setup SQL, then try again.'); } finally { button.disabled = false; button.innerHTML = `Save note ${icon('check')}`; lucide.createIcons(); } });
+  backdrop.querySelector('form').addEventListener('submit', async (event) => { event.preventDefault(); const id = existing?.id || Date.now(); const button = backdrop.querySelector('[type="submit"]'); button.disabled = true; button.textContent = 'Saving note…'; try { const imagePath = photoFile ? await uploadNotePhoto(photoFile, id) : (existing?.imagePath || ''); const note = { id, title: backdrop.querySelector('#noteTitle').value.trim(), subject: backdrop.querySelector('#noteSubject').value, body: backdrop.querySelector('#notesText').value.trim(), image: existing?.imagePath ? '' : (photoFile ? '' : (existing?.image || '')), imagePath, updatedAt: new Date().toISOString() }; const index = noteLibrary.findIndex((item) => item.id === note.id); if (index >= 0) noteLibrary[index] = note; else noteLibrary.unshift(note); saveWorkspaceItem('revisie-note-library', JSON.stringify(noteLibrary)); saveWorkspaceItem('revisie-notes', note.body); rememberActivity({ type: 'note', id: note.id, subject: note.subject }); await syncWorkspaceNow(); await hydrateNotePhotos(); closeModal(); renderNoteSurfaces(); notify('Note saved to your library.'); } catch (error) { notify(error.message || 'This note photo could not be saved. Run the storage setup SQL, then try again.'); } finally { button.disabled = false; button.innerHTML = `Save note ${icon('check')}`; lucide.createIcons(); } });
 }
 function preprocessImage(file, forOcr = true) {
   return new Promise((resolve, reject) => {
@@ -1012,7 +1063,7 @@ function preprocessImage(file, forOcr = true) {
 }
 function imageToDataUrl(file) { return new Promise((resolve, reject) => { const image = new Image(); const objectUrl = URL.createObjectURL(file); image.onload = () => { const scale = Math.min(1, 1200 / Math.max(image.width, image.height)); const canvas = document.createElement('canvas'); canvas.width = Math.round(image.width * scale); canvas.height = Math.round(image.height * scale); canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height); URL.revokeObjectURL(objectUrl); resolve(canvas.toDataURL('image/jpeg', .8)); }; image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Image could not be read.')); }; image.src = objectUrl; }); }
 function openPhotoZoom(source, alt = 'Attached note photo') { const backdrop = openModal('Photo', `<img class="photo-zoom" src="${escapeHtml(source)}" alt="${escapeHtml(alt)}">`); backdrop.querySelector('.photo-zoom').addEventListener('click', () => closeModal()); }
-function viewNote(noteId) { const note = noteLibrary.find((item) => item.id === noteId); if (!note) return; const body = escapeHtml(note.body || '').replace(/\n/g, '<br>'); const backdrop = openModal(note.title, `<div class="flashcard-meta"><span>${subjectData[note.subject]?.label || note.subject}</span><span>${new Date(note.updatedAt).toLocaleDateString()}</span></div><div class="note-view">${body || '<em>No written content.</em>'}</div>${notePhotoMarkup(note, 'note-view-image')}${hasNotePhoto(note) ? '<button class="secondary-button" id="retryNotePhoto" type="button">Retry photo</button>' : ''}<button class="primary-button" id="editViewedNote">Edit note ${icon('pencil')}</button>`); backdrop.querySelector('#editViewedNote').addEventListener('click', () => openNotes(note.subject, note.id)); backdrop.querySelector('#retryNotePhoto')?.addEventListener('click', async () => { const path = notePhotoPath(note); if (path) { notePhotoCache.delete(path); note.imagePath = path; note.image = ''; } delete note.photoError; updateNotePhotoSlots(); await hydrateNotePhotos(); }); updateNotePhotoSlots(); void hydrateNotePhotos(); }
+function viewNote(noteId) { const note = noteLibrary.find((item) => item.id === noteId); if (!note) return; rememberActivity({ type: 'note', id: note.id, subject: note.subject }); const body = escapeHtml(note.body || '').replace(/\n/g, '<br>'); const backdrop = openModal(note.title, `<div class="flashcard-meta"><span>${subjectData[note.subject]?.label || note.subject}</span><span>${new Date(note.updatedAt).toLocaleDateString()}</span></div><div class="note-view">${body || '<em>No written content.</em>'}</div>${notePhotoMarkup(note, 'note-view-image')}${hasNotePhoto(note) ? '<button class="secondary-button" id="retryNotePhoto" type="button">Retry photo</button>' : ''}<button class="primary-button" id="editViewedNote">Edit note ${icon('pencil')}</button>`); backdrop.querySelector('#editViewedNote').addEventListener('click', () => openNotes(note.subject, note.id)); backdrop.querySelector('#retryNotePhoto')?.addEventListener('click', async () => { const path = notePhotoPath(note); if (path) { notePhotoCache.delete(path); note.imagePath = path; note.image = ''; } delete note.photoError; updateNotePhotoSlots(); await hydrateNotePhotos(); }); updateNotePhotoSlots(); void hydrateNotePhotos(); }
 function fileToDataUrl(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('File could not be read.')); reader.readAsDataURL(file); }); }
 function getResourceDatabase() { if (resourceDatabasePromise) return resourceDatabasePromise; resourceDatabasePromise = new Promise((resolve, reject) => { const request = indexedDB.open('revisie-resource-files', 1); request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains('files')) request.result.createObjectStore('files', { keyPath: 'id' }); }; request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); }); return resourceDatabasePromise; }
 function resourceDatabaseRequest(mode, action) { return getResourceDatabase().then((database) => new Promise((resolve, reject) => { const transaction = database.transaction('files', mode); const request = action(transaction.objectStore('files')); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); })); }
@@ -1025,7 +1076,7 @@ function resourceSubjectLabel(subjectKey) { return subjectData[subjectKey]?.labe
 function resourceFile(resource) { const [header, encoded] = String(resource.data || '').split(','); const mime = header.match(/data:([^;]+)/)?.[1] || 'application/pdf'; const binary = atob(encoded || ''); const bytes = new Uint8Array(binary.length); for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index); return new File([bytes], resource.name || 'revision-pdf.pdf', { type: mime }); }
 function resourceObjectUrl(resource) { return URL.createObjectURL(resourceFile(resource)); }
 async function resourceUrl(resource) { if (resource.data) return resourceObjectUrl(resource); if (!resource.storagePath) throw new Error('This PDF is not available in cloud storage.'); const client = await getSupabaseClient(); const { data, error } = await client.storage.from(RESOURCE_BUCKET).createSignedUrl(resource.storagePath, 300); if (error) throw error; return data.signedUrl; }
-async function openResource(resource) { try { const url = await resourceUrl(resource); const link = document.createElement('a'); link.href = url; link.target = '_blank'; link.rel = 'noopener'; document.body.appendChild(link); link.click(); link.remove(); if (resource.data) setTimeout(() => URL.revokeObjectURL(url), 300000); } catch (error) { notify(error.message || 'This PDF could not be opened.'); } }
+async function openResource(resource) { try { const url = await resourceUrl(resource); rememberActivity({ type: 'resource', id: resource.id, subject: resource.subject }); const link = document.createElement('a'); link.href = url; link.target = '_blank'; link.rel = 'noopener'; document.body.appendChild(link); link.click(); link.remove(); if (resource.data) setTimeout(() => URL.revokeObjectURL(url), 300000); } catch (error) { notify(error.message || 'This PDF could not be opened.'); } }
 async function downloadResource(resource) { try { if (resource.data) { const file = resourceFile(resource); if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: resource.name || 'Revision PDF' }); return; } const url = URL.createObjectURL(file); const link = document.createElement('a'); link.href = url; link.download = file.name; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); return; } const url = await resourceUrl(resource); const link = document.createElement('a'); link.href = url; link.download = resource.name || 'revision-pdf.pdf'; document.body.appendChild(link); link.click(); link.remove(); } catch (error) { if (error.name !== 'AbortError') notify(error.message || 'This PDF could not be downloaded.'); } }
 function renderResourceList(list, resources, emptyMessage) { if (!list) return; list.innerHTML = resources.length ? resources.map((resource) => `<article class="resource-row">${icon('file-text')}<div><strong>${escapeHtml(resource.name)}</strong><small>${escapeHtml(resourceSubjectLabel(resource.subject))} · ${Math.ceil(resource.size / 1024)} KB · saved ${new Date(resource.savedAt).toLocaleDateString()}</small></div><div class="resource-actions"><button data-open-resource="${resource.id}">Open</button><button data-download-resource="${resource.id}">Download</button><button data-share-resource="${resource.id}">Share</button><button data-delete-resource="${resource.id}">Delete</button></div></article>`).join('') : `<p class="empty-state">${emptyMessage}</p>`; list.querySelectorAll('[data-open-resource]').forEach((button) => button.addEventListener('click', () => { const resource = resourceLibrary.find((item) => String(item.id) === button.dataset.openResource); if (resource) openResource(resource); })); list.querySelectorAll('[data-download-resource]').forEach((button) => button.addEventListener('click', () => { const resource = resourceLibrary.find((item) => String(item.id) === button.dataset.downloadResource); if (resource) downloadResource(resource); })); list.querySelectorAll('[data-share-resource]').forEach((button) => button.addEventListener('click', () => shareResource(button.dataset.shareResource))); list.querySelectorAll('[data-delete-resource]').forEach((button) => button.addEventListener('click', async () => { const index = resourceLibrary.findIndex((item) => String(item.id) === button.dataset.deleteResource); if (index >= 0 && confirm('Delete this PDF?')) { const [resource] = resourceLibrary.splice(index, 1); if (resource.storagePath) { const client = await getSupabaseClient(); const { error } = await client.storage.from(RESOURCE_BUCKET).remove([resource.storagePath]); if (error) throw error; } else await removeResourceFile(resource.id); saveResourceMetadata(); await syncWorkspaceNow(); renderResources(); renderSubjectResources(); notify('PDF deleted.'); } })); }
 function renderResources() { renderResourceList(document.querySelector('.resource-list'), resourceLibrary, 'Save PDFs here so they are ready when you revise.'); }
@@ -1232,10 +1283,9 @@ function setupSettingsPage() {
   if (!location.pathname.endsWith('settings.html')) return;
   const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
   const name = document.getElementById('displayName'); if (!name) return;
-  const subject = document.getElementById('defaultSubject'); const minutes = document.getElementById('dailyMinutes'); const motion = document.getElementById('reduceMotion');
+  const motion = document.getElementById('reduceMotion');
   name.value = settings.name || JSON.parse(localStorage.getItem('revisie-account') || 'null')?.name || '';
-  subject.innerHTML = subjectEntries().map(([key, item]) => `<option value="${key}">${escapeHtml(item.label)}</option>`).join('');
-  subject.value = subjectEntries().some(([key]) => key === settings.subject) ? settings.subject : subjectEntries()[0]?.[0] || ''; subject.disabled = !subjectEntries().length; minutes.value = settings.minutes || 35; motion.checked = Boolean(settings.reduceMotion);
+  motion.checked = Boolean(settings.reduceMotion);
   const form = document.getElementById('settingsForm'); const save = form.querySelector('[type="submit"]');
   let stagedPhoto = profilePhoto(settings.profilePhoto), photoVersion = 0;
   const input = document.getElementById('profilePhoto'); const preview = document.getElementById('profilePhotoPreview'); const remove = document.getElementById('removeProfilePhoto'); const status = document.getElementById('profilePhotoStatus');
@@ -1257,13 +1307,14 @@ function setupSettingsPage() {
     event.preventDefault(); if (save.disabled) return;
     try {
       const current = JSON.parse(localStorage.getItem('revisie-settings') || '{}');
-      saveWorkspaceItem('revisie-settings', JSON.stringify({ ...current, name: name.value.trim(), subject: subject.value, minutes: Number(minutes.value) || 35, reduceMotion: motion.checked, profilePhoto: stagedPhoto }));
+      delete current.subject; delete current.minutes;
+      saveWorkspaceItem('revisie-settings', JSON.stringify({ ...current, name: name.value.trim(), reduceMotion: motion.checked, profilePhoto: stagedPhoto }));
       document.documentElement.classList.toggle('reduce-motion', motion.checked); renderProfile(); status.textContent = ''; notify('Settings saved.');
     } catch { notify('Could not save settings. Free some browser storage and try again.'); }
   });
   document.getElementById('resetData').addEventListener('click', () => {
     if (!confirm('Reset your personal subjects, flashcards, notes, resources, and planner data?')) return;
-    ['revisie-subjects', 'revisie-flashcards', 'revisie-note-library', 'revisie-notes', 'revisie-note-title', 'revisie-resources', 'revisie-plan', 'revisie-flashcard-study', 'revisie-flashcard-drafts', 'revisie-card-destination'].forEach((key) => removeWorkspaceItem(key));
+    ['revisie-subjects', 'revisie-flashcards', 'revisie-note-library', 'revisie-notes', 'revisie-note-title', 'revisie-resources', 'revisie-plan', 'revisie-flashcard-study', 'revisie-last-activity', 'revisie-flashcard-drafts', 'revisie-card-destination'].forEach((key) => removeWorkspaceItem(key));
     notify('Personal data reset. Built-in GCSE content is unchanged.');
   });
   setupAccountSettings();
@@ -1446,14 +1497,15 @@ function renderTopicProgress() {
     card.setAttribute('aria-label', `${card.dataset.unit}: ${count} cards, ${percent}% marked known`);
   });
 }
-function reviewCards(cards, title) {
+function reviewCards(cards, title, resume = null) {
   const subjectKey = subjectEntries().find(([, subject]) => title.startsWith(`${subject.label} /`))?.[0] || currentSubject;
   const unitName = title.split(' / ').slice(1).join(' / ');
-  const queue = uniqueCards(cards);
-  const total = queue.length;
-  let known = 0;
+  const queue = uniqueCards(resume?.queue || cards);
+  let known = resume?.known || 0;
+  const total = queue.length + known;
   if (total) beginFlashcardStudy(subjectKey);
   const render = () => {
+    rememberActivity({ type: 'review', subject: subjectKey, unit: unitName, queue, known });
     if (!queue.length) {
       openModal(title, `<div class="flashcard-meta"><span>${known} of ${total} cards complete</span><span>Session complete</span></div><div class="flashcard answer"><div><p>Great work.</p><small>All cards marked known</small></div></div>`);
       renderSubjectProgress(); renderTopicProgress();
@@ -1621,16 +1673,17 @@ function setupProgressRoute() {
 }
 function setupOverviewRoute() {
   if (!location.pathname.endsWith('index.html') && location.pathname !== '/') return;
-  const settings = JSON.parse(localStorage.getItem('revisie-settings') || '{}'); const entries = subjectEntries(); const allocations = dueCards();
-  const plannedSubject = entries.find(([key]) => Number(allocations[key]) > 0)?.[0] || entries.find(([key]) => key === settings.subject)?.[0] || entries[0]?.[0];
-  const subject = subjectData[plannedSubject]; const unit = subject ? getUnits(plannedSubject)[0] : null; const deck = unit ? getDeck(plannedSubject, unit.name) : [];
+  const entries = subjectEntries(); const last = lastActivityDestination();
   const label = document.querySelector('.continue-body .subject-label'); const title = document.querySelector('.continue-body h3'); const detail = document.querySelector('.continue-body p'); const button = document.getElementById('startReview'); const grid = document.getElementById('overviewSubjects');
-  if (label) label.textContent = subject ? subject.label.toUpperCase() : 'YOUR SUBJECTS';
-  if (title) title.textContent = unit?.name || (subject ? 'Add your first topic' : 'Add a subject to get started');
-  if (detail) detail.textContent = deck.length ? Number(allocations[plannedSubject]) > 0 ? `${allocations[plannedSubject]} cards allocated today` : 'No cards allocated today' : subject ? 'Create a flashcard to start this deck.' : 'Choose the subjects you want in your workspace.';
+  const heading = document.getElementById('resume-heading');
+  if (heading) heading.textContent = last ? 'Pick up where you left off' : 'Start revising';
+  if (label) label.textContent = (last?.subject || 'YOUR SUBJECTS').toUpperCase();
+  if (title) title.textContent = last?.title || (entries.length ? 'Choose a subject' : 'Add a subject to get started');
+  if (detail) detail.textContent = last?.detail || 'Your last activity will appear here once you start.';
   if (button) {
-    button.textContent = deck.length ? 'Resume review' : subject ? 'Add flashcards' : 'Add a subject'; button.dataset.subject = plannedSubject || '';
-    button.onclick = deck.length ? () => reviewCards(deck, `${subject.label} / ${unit.name}`) : subject ? () => openCardComposer(plannedSubject) : () => { location.href = 'subjects.html'; };
+    button.textContent = last?.button || (entries.length ? 'Browse subjects' : 'Add a subject');
+    button.dataset.subject = readLastActivity()?.subject || '';
+    button.onclick = last?.action || (() => { location.href = 'subjects.html'; });
   }
   if (grid) {
     grid.innerHTML = entries.map(([key, item]) => `<a class="subject-card" href="${subjectRoute(key)}"><div class="subject-top"><div class="subject-icon ${item.color || 'blue'}">${subjectSymbol(item)}</div></div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(getUnits(key)[0]?.name || 'No topics yet')}</small></a>`).join('') || '<p class="empty-state">No subjects yet. Add one from the Subjects page.</p>';
@@ -1662,7 +1715,7 @@ function renderTimetable() { const app = document.getElementById('timetableApp')
   app.querySelectorAll('.session-card').forEach((card) => { card.addEventListener('dragstart', (event) => { event.dataTransfer.setData('text/plain', `session:${card.dataset.sessionId}`); }); card.addEventListener('keydown', (event) => { if (event.target === card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.stopPropagation(); card.click(); } }); card.addEventListener('click', (event) => { if (!event.target.closest('[data-complete-session]')) openTimetableSession(allItems.find((item) => String(item.id) === card.dataset.sessionId), date); }); });
   app.querySelectorAll('[data-complete-session]').forEach((button) => button.addEventListener('click', (event) => { event.stopPropagation(); const item = allItems.find((entry) => String(entry.id) === button.dataset.completeSession); if (item) { item.done = !item.done; completePlannerStudy(item); saveWorkspaceItem('revisie-planner-items', JSON.stringify(allItems)); renderTimetable(); } }));
   app.querySelectorAll('.time-slot').forEach((slot) => { const addToSlot = () => { const time = slot.dataset.time; if (app.dataset.subject) { const subject = subjectData[app.dataset.subject] || subjects.find(([key]) => key === app.dataset.subject)?.[1]; openTimetableSession({ subject: app.dataset.subject, title: `${subject?.label || 'Revision'} revision` }, date, time); } else openTimetableSession(null, date, time); }; slot.addEventListener('click', (event) => { if (!event.target.closest('.session-card')) addToSlot(); }); slot.addEventListener('keydown', (event) => { if (event.target !== slot) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); addToSlot(); } }); slot.addEventListener('dragover', (event) => { event.preventDefault(); slot.classList.add('drag-over'); }); slot.addEventListener('dragleave', () => slot.classList.remove('drag-over')); slot.addEventListener('drop', (event) => { event.preventDefault(); slot.classList.remove('drag-over'); const [kind, value] = event.dataTransfer.getData('text/plain').split(':'); if (kind === 'session') { const item = allItems.find((entry) => String(entry.id) === value); if (item) { item.date = date; item.start = slot.dataset.time; saveWorkspaceItem('revisie-planner-items', JSON.stringify(allItems)); renderTimetable(); notify('Session moved.'); } } if (kind === 'subject') { const subject = subjectData[value] || subjects.find(([key]) => key === value)?.[1]; openTimetableSession({ subject: value, title: `${subject?.label || 'Revision'} revision` }, date, slot.dataset.time); } }); }); }
-function setupTimetableRoute() { if (!location.pathname.endsWith('planner.html')) return; const app = document.getElementById('timetableApp'); if (app) renderTimetable(); }
+function setupTimetableRoute() { if (!location.pathname.endsWith('planner.html')) return; rememberActivity({ type: 'page', page: 'planner' }); const app = document.getElementById('timetableApp'); if (app) renderTimetable(); }
 setupSubjectAppearanceButtons(); lucide.createIcons(); setupPersonalAccount(); setupAccountRoute(); setupProgressRoute(); setupOverviewRoute(); setupTimetableRoute(); renderDeletedSubjectRoute(); setupSharedItemPage(); void prepareResourceLibrary(); restoreSignedInAccount(); void hydrateNotePhotos();
 
 // Recalculate after midnight, returning to a tab, or activity in another tab.
@@ -1709,3 +1762,9 @@ document.addEventListener('visibilitychange', () => { flushFlashcardStudy(); res
 window.addEventListener('pagehide', () => { flushFlashcardStudy(); if (flashcardStudySession) flashcardStudySession.startedAt = null; });
 window.addEventListener('pageshow', resumeFlashcardStudy);
 window.addEventListener('storage', (event) => { if (event.key === flashcardStudyKey) setupProgressRoute(); });
+
+if (['mathematics.html', 'biology.html', 'history.html', 'psychology.html', 'subject.html'].some(route => location.pathname.endsWith(route)) && subjectData[currentSubject] && !subjectData[currentSubject].deleted) {
+  const activity = readLastActivity();
+  if (!(activity?.type === 'review' && activity.subject === currentSubject)) rememberActivity({ type: 'subject', subject: currentSubject });
+}
+window.addEventListener('storage', event => { if (event.key === lastActivityKey) setupOverviewRoute(); });
