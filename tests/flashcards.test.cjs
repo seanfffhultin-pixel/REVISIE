@@ -35,7 +35,7 @@ function harness(initial = {}, remoteCards = [], options = {}) {
   };
   const context = vm.createContext({ localStorage, crypto: webcrypto, console: { warn() {} }, setTimeout: () => 1, clearTimeout() {}, window: { addEventListener() {} }, document: { addEventListener() {} }, getSupabaseClient: async () => client, getDeck: () => [], getUnits: () => [{ name: 'Cells' }] });
   vm.runInContext(`
-    const syncedStorageKeys = ['revisie-flashcards','revisie-topics','revisie-note-library','revisie-streak'];
+    const syncedStorageKeys = ['revisie-flashcards','revisie-topics','revisie-note-library','revisie-streak','revisie-flashcard-study'];
     const notePhotoCache = new Map(); function storedNoteMetadata(note) { return note; }
     const workspaceTimestampKey = 'timestamp'; const workspaceOwnerKey = 'owner'; let workspaceSyncTimer;
     const nativeLocalStorageSetItem = localStorage.setItem.bind(localStorage);
@@ -165,4 +165,14 @@ test('workspace sync merges study days across devices and retries conflicts', as
   assert.equal(h.writes, 2);
   assert.deepEqual(JSON.parse(h.remote.data['revisie-streak']).days, ['2026-10-09', '2026-10-10', '2026-10-11']);
   assert.equal(h.storage.get('revisie-streak'), h.remote.data['revisie-streak']);
+});
+
+test('workspace sync merges flashcard study time from different devices', async () => {
+  const h = harness(); const key = 'revisie-flashcard-study';
+  const record = milliseconds => ({ subject: 'biology', date: '2026-10-12', milliseconds });
+  h.remote.data[key] = JSON.stringify({ laptop: record(120000), shared: record(60000) });
+  h.context.saveWorkspaceItem(key, JSON.stringify({ phone: record(300000), shared: record(180000) }));
+  assert.equal(await h.context.syncWorkspaceNow(), true);
+  const merged = JSON.parse(h.remote.data[key]);
+  assert.equal(merged.laptop.milliseconds, 120000); assert.equal(merged.phone.milliseconds, 300000); assert.equal(merged.shared.milliseconds, 180000);
 });
