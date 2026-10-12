@@ -363,7 +363,7 @@ function enableWorkspaceSync() {
   window.addEventListener('pagehide', () => { clearTimeout(workspaceSyncTimer); workspaceSyncTimer = undefined; void syncWorkspaceNow(); });
 }
 async function restoreWorkspace() { return syncWorkspaceNow(); }
-async function restoreSignedInAccount() { if (location.pathname.endsWith('account.html')) return; try { const client = await getSupabaseClient(); const { data: { user } } = await client.auth.getUser(); if (!user) return; const account = JSON.parse(localStorage.getItem('revisie-account') || 'null'); await restoreWorkspace(); await hydrateNotePhotos(); if (!account || account.id !== user.id) saveWorkspaceItem('revisie-account', JSON.stringify({ id: user.id, name: user.user_metadata?.display_name || user.email.split('@')[0], email: user.email })); } catch (error) { /* Sign-in remains available even if offline. */ } }
+async function restoreSignedInAccount() { if (location.pathname.endsWith('account.html')) return; try { const client = await getSupabaseClient(); const { data: { user } } = await client.auth.getUser(); if (!user) return; const account = JSON.parse(localStorage.getItem('revisie-account') || 'null'); await restoreWorkspace(); await hydrateNotePhotos(); if (!account || account.id !== user.id) saveWorkspaceItem('revisie-account', JSON.stringify({ id: user.id, name: user.user_metadata?.display_name || user.email.split('@')[0], email: user.email })); setupGuestTutorial(); } catch (error) { /* Sign-in remains available even if offline. */ } }
 enableWorkspaceSync();
 
 const topicUnits = {
@@ -1772,3 +1772,61 @@ if (['mathematics.html', 'biology.html', 'history.html', 'psychology.html', 'sub
   if (!(activity?.type === 'review' && activity.subject === currentSubject)) rememberActivity({ type: 'subject', subject: currentSubject });
 }
 window.addEventListener('storage', event => { if (event.key === lastActivityKey) setupOverviewRoute(); });
+
+
+// Guest onboarding stays local to this browser, separate from revision data.
+function dismissGuestTutorial() {
+  try { localStorage.setItem('revisie-guest-tour-seen', '1'); } catch {}
+  const invite = document.getElementById('guestTourInvite');
+  if (invite) invite.hidden = true;
+}
+function openGuestTutorial() {
+  const fromInvite = Boolean(document.activeElement?.closest('#guestTourInvite'));
+  dismissGuestTutorial();
+  const steps = [
+    { title: 'Your revision workspace', icon: 'layout-dashboard', place: 'Overview', page: 'index.html', description: 'Overview shows your streak and lets you pick up your last revision activity. On a phone, use the menu button at the top to find the other pages.', tip: 'As a guest, your work is saved in this browser. Sign in to sync it across devices.' },
+    { title: 'Start with a subject', icon: 'library', place: 'Sidebar → Subjects', page: 'subjects.html', description: 'Choose a subject to see its topics, flashcards and notes. You can also add your own subjects and topics.', tip: 'Use a subject’s menu to change its name, colour, symbol or exam board.' },
+    { title: 'Practise with flashcards', icon: 'layers-3', place: 'Sidebar → Flashcards', page: 'flashcards.html', description: 'Open a topic’s deck and tap a card to reveal the answer. Choose “I knew this” to move on, or “Review again” to keep practising it.', tip: 'Your review time appears in Progress. You can create your own cards or import a deck.' },
+    { title: 'Keep your study material together', icon: 'notebook-pen', place: 'Sidebar → Notes / Resources', page: 'notes.html', description: 'Notes holds your written summaries and photos. Resources keeps PDFs organised by subject.', tip: 'You can use your material as a guest. Sign in when you want to share notes, decks or resources by link.' },
+    { title: 'Plan and track your revision', icon: 'calendar-days', place: 'Sidebar → Revision planner / Progress', page: 'planner.html', description: 'Add a revision session to a time slot in the planner. Mark it complete when you finish. Progress shows completed sessions and your recorded flashcard minutes.', tip: 'Reviewing a flashcard or completing a planner session earns a study day towards your streak.' },
+    { title: 'Settings and help', icon: 'settings-2', place: 'Top bar → Settings / Help centre', page: 'settings.html', description: 'Settings lets you choose Light, Dark or System appearance, change your profile and reduce interface motion.', tip: 'You can replay this tour from the Help centre whenever you need it.' },
+  ];
+  let index = 0;
+  const backdrop = openModal('Quick tour', '<div id="guestTourContent"></div><div class="guest-tour-footer"><button class="text-button" type="button" id="skipGuestTour">Skip tour</button><div><button class="secondary-button" type="button" id="previousGuestTour">Back</button><button class="primary-button" type="button" id="nextGuestTour">Next</button></div></div>');
+  backdrop.dataset.guestTour = 'true';
+  if (fromInvite) modalFocusTarget = document.querySelector('.topbar-link[href="help.html"]');
+  const content = backdrop.querySelector('#guestTourContent');
+  const next = backdrop.querySelector('#nextGuestTour');
+  const back = backdrop.querySelector('#previousGuestTour');
+  const render = () => {
+    const step = steps[index];
+    content.innerHTML = `<p class="eyebrow">STEP ${index + 1} OF ${steps.length}</p><progress class="guest-tour-progress" value="${index + 1}" max="${steps.length}" aria-label="Tour progress"></progress><div class="guest-tour-location">${icon(step.icon)}<span>${escapeHtml(step.place)}</span></div><h3 id="guestTourStep" tabindex="-1">${escapeHtml(step.title)}</h3><p class="guest-tour-description">${escapeHtml(step.description)}</p><p class="guest-tour-tip">${escapeHtml(step.tip)}</p><a class="text-button guest-tour-explore" href="${step.page}">Open ${step.page === 'index.html' ? 'Overview' : step.page === 'subjects.html' ? 'Subjects' : step.page === 'flashcards.html' ? 'Flashcards' : step.page === 'notes.html' ? 'Notes' : step.page === 'planner.html' ? 'Revision planner' : 'Settings'} ${icon('arrow-up-right')}</a>`;
+    back.disabled = index === 0;
+    next.textContent = index === steps.length - 1 ? 'Done' : 'Next';
+    lucide.createIcons();
+    content.querySelector('h3').focus({ preventScroll: true });
+  };
+  next.addEventListener('click', () => { if (index === steps.length - 1) closeModal(); else { index++; render(); } });
+  back.addEventListener('click', () => { if (index > 0) { index--; render(); } });
+  backdrop.querySelector('#skipGuestTour').addEventListener('click', () => closeModal());
+  render();
+}
+function setupGuestTutorial() {
+  const invite = document.getElementById('guestTourInvite');
+  if (invite) {
+    let seen = false;
+    try { seen = localStorage.getItem('revisie-guest-tour-seen') === '1'; } catch {}
+    invite.hidden = Boolean(localStorage.getItem('revisie-account')) || seen;
+  }
+  for (const id of ['startGuestTour', 'replayGuestTour', 'dismissGuestTour']) {
+    const button = document.getElementById(id);
+    if (!button || button.dataset.tourReady) continue;
+    button.dataset.tourReady = 'true';
+    button.addEventListener('click', id === 'dismissGuestTour' ? dismissGuestTutorial : openGuestTutorial);
+  }
+  lucide.createIcons();
+}
+setupGuestTutorial();
+window.addEventListener('storage', event => {
+  if (event.key === 'revisie-guest-tour-seen' || event.key === 'revisie-account' || event.key === null) setupGuestTutorial();
+});
