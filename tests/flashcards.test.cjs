@@ -35,7 +35,7 @@ function harness(initial = {}, remoteCards = [], options = {}) {
   };
   const context = vm.createContext({ localStorage, crypto: webcrypto, console: { warn() {} }, setTimeout: () => 1, clearTimeout() {}, window: { addEventListener() {} }, document: { addEventListener() {} }, getSupabaseClient: async () => client, getDeck: () => [], getUnits: () => [{ name: 'Cells' }] });
   vm.runInContext(`
-    const syncedStorageKeys = ['revisie-flashcards','revisie-topics','revisie-note-library','revisie-streak','revisie-flashcard-study','revisie-last-activity'];
+    const syncedStorageKeys = ['revisie-flashcards','revisie-topics','revisie-note-library','revisie-streak','revisie-flashcard-study','revisie-last-activity','revisie-folders'];
     const notePhotoCache = new Map(); function storedNoteMetadata(note) { return note; }
     const workspaceTimestampKey = 'timestamp'; const workspaceOwnerKey = 'owner'; let workspaceSyncTimer;
     const nativeLocalStorageSetItem = localStorage.setItem.bind(localStorage);
@@ -188,4 +188,17 @@ test('workspace sync keeps the most recent activity across devices', async () =>
   h.context.saveWorkspaceItem(key, JSON.stringify(newest));
   assert.equal(await h.context.syncWorkspaceNow(), true);
   assert.deepEqual(JSON.parse(h.remote.data[key]), newest);
+});
+
+test('workspace sync preserves concurrent folder additions and links across devices', async () => {
+  const deck = { type: 'deck', subject: 'biology', unit: 'Cells' };
+  const folder = { id: 'shared', name: 'Mocks', color: 'green', items: [deck] };
+  const { context, remote, storage } = harness({ 'revisie-folders': serialize([folder]) });
+  remote.data['revisie-folders'] = serialize([{ ...folder, name: 'Summer mocks', items: [deck, { type: 'note', id: 'remote-note' }] }, { id: 'laptop', name: 'Laptop folder', items: [] }]);
+  context.saveWorkspaceItem('revisie-folders', serialize([{ ...folder, color: 'purple', items: [deck, { type: 'resource', id: 'phone-pdf' }] }]));
+  assert.equal(await context.syncWorkspaceNow(), true);
+  const saved = JSON.parse(storage.get('revisie-folders'));
+  assert.equal(saved.length, 2);
+  assert.equal(saved[0].name, 'Summer mocks'); assert.equal(saved[0].color, 'purple');
+  assert.equal(saved[0].items.length, 3);
 });

@@ -898,3 +898,54 @@ html[data-theme="dark"] body .guest-tour-symbol { background: #344a38; }
   body #guestTourStep { font-size: 21px; }
 }
 html[data-theme="dark"] body .help-card p { color: var(--muted); }
+
+/* Collections reuse the workspace's surfaces and subject colours. */
+body .folders-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin: 28px 0 20px; }
+body .folders-toolbar > p { margin: 0; color: var(--muted); font-size: 12px; }
+body .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 16px; }
+body .folder-card { position: relative; background: var(--white); border: 1px solid var(--line); border-radius: var(--surface-radius); box-shadow: var(--shadow); }
+body .folder-card:hover { border-color: var(--teal); }
+body .folder-card-link { display: block; min-height: 170px; padding: 22px; border-radius: inherit; }
+body .folder-card .subject-icon { margin-bottom: 22px; }
+body .folder-card h2 { font-size: 17px; overflow-wrap: anywhere; }
+body .folder-card p { margin: 10px 0 0; color: var(--muted); font-size: 11px; }
+body .folder-card > .item-actions { position: absolute; right: 14px; top: 14px; }
+body .folder-empty { padding: 40px 24px; border: 1px dashed var(--line); border-radius: var(--surface-radius); margin-top: 20px; }
+body .folder-empty h2 { font-size: 19px; margin-bottom: 12px; }
+body .folder-empty p { max-width: 480px; margin-bottom: 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
+body .folder-empty .secondary-button { margin-top: 20px; width: fit-content; }
+body .folder-empty-symbol { color: var(--teal); margin-bottom: 22px; }
+body .folder-empty-symbol svg { width: 36px; height: 36px; stroke-width: 1.5; }
+body .folder-back { display: inline-flex; margin-bottom: 28px; }
+body .folder-heading { display: flex; align-items: flex-start; gap: 18px; margin-bottom: 28px; }
+body .folder-heading > .subject-icon { width: 52px; height: 52px; flex-shrink: 0; }
+body .folder-heading > .subject-icon svg { width: 25px; height: 25px; }
+body .folder-heading > div { flex: 1; min-width: 0; }
+body .folder-heading h1 { font-size: clamp(30px, 4vw, 46px); overflow-wrap: anywhere; }
+body .folder-heading p:last-child { color: var(--muted); font-size: 12px; margin: 0; }
+body .folder-page-actions, body .folder-dialog-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
+body .folder-content-list { display: grid; gap: 12px; }
+body .folder-content-row { display: flex; align-items: center; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--white); }
+body .folder-content-open { flex: 1; min-width: 0; padding: 0; text-align: left; }
+body .folder-content-open strong { display: block; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+body .folder-content-open small { display: block; margin-top: 5px; color: var(--muted); line-height: 1.6; font-size: 11px; overflow-wrap: anywhere; }
+body .folder-content-row.is-unavailable { border-style: dashed; }
+body .folder-material-icon { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 9px; background: var(--paper); color: var(--teal); }
+body .folder-material-icon svg { width: 18px; height: 18px; }
+body .folder-choice-list { max-height: 300px; overflow: auto; overscroll-behavior: contain; display: grid; gap: 8px; margin: 16px 0; }
+body .folder-choice { display: grid; grid-template-columns: 18px 34px minmax(0, 1fr); align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--white); }
+body .folder-choice[hidden] { display: none; }
+body .folder-choice:has(input:checked) { border-color: var(--teal); }
+body .folder-choice input { width: 16px; height: 16px; margin: 0; accent-color: var(--teal); }
+body .folder-choice strong { display: block; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+body .folder-choice small { display: block; margin-top: 4px; color: var(--muted); line-height: 1.5; font-size: 11px; }
+body .folder-choice > span:last-child { overflow-wrap: anywhere; }
+body .folder-dialog-copy, body .folder-selection-count, body .folder-review-source { font-size: 12px; line-height: 1.7; color: var(--muted); }
+body .folder-review-source { margin: 16px 0 -10px; }
+@media(max-width:650px) {
+  body .folder-heading { gap: 12px; }
+  body .folder-heading > .subject-icon { width: 40px; height: 40px; }
+  body .folder-content-row { padding: 14px; gap: 10px; }
+  body .folder-choice { gap: 8px; padding: 10px; }
+  body .folder-choice-list { max-height: 38dvh; }
+}
