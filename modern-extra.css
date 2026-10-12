@@ -489,8 +489,16 @@ body button:disabled { opacity: .55; cursor: wait; transform: none; }
   body .timetable-date { flex: 1; justify-content: space-between; }
   body .timetable-date strong { font-size: 14px; }
 }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-html.reduce-motion { scroll-behavior: auto; }
+/* Keep functional transforms (the mobile menu and toast positioning) intact. */
+html.reduce-motion, html.reduce-motion *,
+html.reduce-motion *::before, html.reduce-motion *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+html.reduce-motion body :is(.primary-button:hover, .secondary-button:hover, .subject-card:hover, .stat-card:hover, .help-card:hover, .workspace-switcher:hover, .nav-item:hover, .continue-card:hover .continue-image img) {
+  transform: none !important;
+}
 
 /* Study streak: shared with the overview card and detail dialog. */
 body .streak-panel {
