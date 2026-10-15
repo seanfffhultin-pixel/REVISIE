@@ -10,6 +10,7 @@
     document.documentElement.classList.toggle('reduce-motion', reduceMotion);
     const dark = preference === 'dark' || (preference !== 'light' && system.matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    window.revisieBrand?.apply();
   };
   window.revisieTheme = { apply };
   apply();

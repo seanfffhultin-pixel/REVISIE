@@ -46,7 +46,8 @@ body .nav-item.active {
   box-shadow: inset 3px 0 #356b5e;
 }
 body .nav-item.active svg { color: var(--teal); }
-body .nav-count { padding: 3px 7px; font-size: 9px; }
+body .nav-count { padding: 3px 7px; font-size: 9px; min-width: 22px; text-align: center; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+body .library-total { display: inline-block; max-width: 100%; margin: 14px 0 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); font-size: 11px; line-height: 1.6; }
 body .account-panel { padding: 14px 10px; border-radius: 12px; background: #f2f5ef; }
 body .topbar {
   height: 76px;
@@ -232,7 +233,6 @@ body .nav-item.active {
 body .nav-item.active svg { color: #e6edc3; }
 body .nav-count { background: #eaf0e4; color: #56644c; border-radius: 7px; }
 body .nav-item.active .nav-count { background: #ffffff18; color: #eef2dc; }
-body .nav-item.active .nav-count.alert { background: #ffffff18; color: #f8d1ba; }
 
 body .topbar {
   background: #f6f7f2d9;
@@ -806,8 +806,11 @@ html[data-theme="dark"] body .app-shell,
 html[data-theme="dark"] body .auth-page { background: radial-gradient(ellipse at 85% 0%, #25382b50, transparent 48%), var(--paper); }
 html[data-theme="dark"] body .sidebar { background: #19231d; border-color: var(--line); }
 html[data-theme="dark"] body .topbar { background: #151e1ae6; border-color: var(--line); }
-html[data-theme="dark"] body .brand-logo img,
-html[data-theme="dark"] body .auth-logo img { filter: brightness(0) invert(.92); }
+/* Each theme uses its supplied artwork, including the original seasonal colours. */
+body :is(.brand-logo, .auth-logo) img {
+  filter: none;
+  background: transparent;
+}
 html[data-theme="dark"] body :is(.subject-card, .stat-card, .continue-card, .help-card, .settings-form, .allocation-panel, .quick-tools, .subject-tray, .timetable-board, .auth-card, .revision-summary, .saved-note, .planner-row, .resource-row, .managed-card, .subject-note, .focus-item, .search-result, .streak-panel, .flashcard, .subject-appearance-preview, .item-actions-list) { background: var(--surface); border-color: var(--line); }
 html[data-theme="dark"] body :is(.workspace-switcher, .account-panel, .today-focus, .help-callout, .timetable-note, .allocation-form, .note-photo-status, .auth-tabs, .streak-modal-summary) { background: #253329; border-color: var(--line); box-shadow: none; }
 html[data-theme="dark"] body :is(.nav-item, .nav-label, .eyebrow, .breadcrumb, .overview-topbar, .settings-form label, .upload-label, .progress-ring, .time-label, .week-day, .modal-close, .focus-detail small, .streak-modal-summary small, .milestone, .settings-section label, .timetable-form-grid label) { color: var(--muted); }
@@ -955,3 +958,114 @@ body .folder-review-source { margin: 16px 0 -10px; }
   body .folder-choice { gap: 8px; padding: 10px; }
   body .folder-choice-list { max-height: 38dvh; }
 }
+
+/* Consistent layout rhythm across libraries, subjects and the planner. */
+:root { --layout-gap: 16px; --section-gap: 32px; --card-padding: 20px; }
+body .page-wrap { padding: 40px clamp(24px, 3.2vw, 48px) 64px; }
+body .page-wrap > .page-intro { max-width: none; margin-bottom: 28px; }
+body h1 { font-size: clamp(32px, 3.6vw, 46px); line-height: 1.14; }
+body .hero-copy { max-width: 640px; margin-top: 14px; line-height: 1.75; }
+body .section-heading { margin-bottom: 16px; align-items: center; }
+body .section-heading h2 { font-size: 19px; }
+body .subject-grid { gap: var(--layout-gap); }
+body .subject-card, body .overview-clean .subject-card { padding: var(--card-padding); }
+body .subject-card strong { font-size: 14px; line-height: 1.5; }
+body .subject-card small { font-size: 12px; line-height: 1.6; }
+body .subject-top { margin-bottom: 16px; }
+body .subject-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+body .subject-actions > button { margin-top: 0; }
+body .library-total { border: 0; border-radius: 999px; padding: 7px 11px; background: #eaf0e4; color: #49634d; line-height: 1.5; }
+body .nav-count { background: #eaf0e4; color: #49634d; }
+body .nav-item.active .nav-count { background: #ffffff18; color: #eef2dc; }
+body .subject-filter { gap: 8px; margin-bottom: 24px; }
+body .subject-filter button { min-height: 36px; padding: 8px 12px; }
+body .page-wrap .notes-section { margin-top: var(--section-gap); max-width: none; }
+body .subject-notes > .empty-state { grid-column: 1 / -1; }
+body :is(.subject-notes, .subject-resources, .resource-list, .notes-library) > .empty-state {
+  padding: 20px; margin: 0; min-height: 76px; border: 1px dashed var(--line);
+  border-radius: 12px; background: var(--white); color: var(--muted); line-height: 1.7;
+}
+body :is(.saved-note, .subject-note, .resource-row, .folder-content-row) { padding: 18px; gap: 16px; }
+body .modal-header { padding: 18px 24px; }
+body .modal-body { padding: 24px; }
+
+/* Planner controls have one clear outline and a persistent checked state. */
+body .timetable-toolbar { flex-wrap: wrap; gap: 16px; margin: 24px 0 16px; align-items: center; }
+body .timetable-date { gap: 10px; min-width: 0; }
+body .timetable-date strong { font-size: 16px; line-height: 1.5; }
+body .timetable-date button { width: 36px; height: 36px; flex: 0 0 36px; }
+body .timetable-add { min-height: 40px; padding: 10px 14px; font-size: 11px; }
+body .timetable-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 20px; }
+body .subject-tray { padding: 18px; }
+body .subject-tray h2 { font-size: 15px; margin-bottom: 8px; }
+body .subject-tray p { font-size: 11px; line-height: 1.65; }
+body .subject-chip-list { gap: 8px; }
+body .subject-chip { min-height: 40px; padding: 10px 12px; font-size: 11px; }
+body .subject-chip small { font-size: 9px; white-space: nowrap; }
+body .timetable-note { padding: 14px 16px; font-size: 11px; line-height: 1.6; }
+body .time-row { grid-template-columns: 60px minmax(0, 1fr); min-height: 76px; border-bottom-color: var(--line); }
+body .time-label { padding: 16px 10px; font-size: 10px; }
+body .time-slot { display: flex; flex-direction: column; gap: 10px; padding: 10px; min-height: 76px; background: transparent; border-left-color: var(--line); }
+body .session-card { gap: 14px; min-height: 72px; padding: 14px; border-radius: 12px; }
+body .session-card > span { flex: 1; min-width: 0; }
+body .session-card strong { font-size: 12px; line-height: 1.6; }
+body .session-card small { font-size: 10px; line-height: 1.65; margin-top: 4px; }
+body .session-card.done { opacity: 1; }
+body .session-card.done strong { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--muted); }
+body .session-card .session-complete {
+  display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px;
+  margin-left: auto; padding: 0; border: 1.5px solid #7b9983; border-radius: 50%;
+  background: #ffffffb3; color: #fff; cursor: pointer; line-height: 1;
+  transition: background .18s ease, border-color .18s ease;
+}
+body .session-complete svg { display: block; width: 18px; height: 18px; stroke-width: 2.5; pointer-events: none; }
+body .session-complete[aria-pressed="false"] svg { visibility: hidden; }
+body .session-card .session-complete[aria-pressed="true"] { background: #36754d; border-color: #36754d; color: #fff; }
+body .session-card .session-complete:hover { border-color: #36754d; box-shadow: 0 0 0 3px #36754d14; }
+body .session-complete:focus-visible { outline: 2px solid var(--teal); outline-offset: 4px; }
+body .planner-row input[type="checkbox"] { width: 20px; height: 20px; margin: 0; flex-shrink: 0; accent-color: #36754d; }
+html[data-theme="dark"] body .library-total { background: var(--raised); color: #c7d8ad; }
+html[data-theme="dark"] body .nav-count { background: var(--raised); color: var(--ink); }
+html[data-theme="dark"] body .nav-item.active .nav-count { background: #1d302415; color: #1d3024; }
+html[data-theme="dark"] body .session-card .session-complete { background: #1c2b22; border-color: #92b59d; }
+html[data-theme="dark"] body .session-card .session-complete[aria-pressed="true"] { background: #9acaa8; border-color: #9acaa8; color: #193725; }
+@media (max-width: 1000px) {
+  body .subject-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  body .timetable-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  body .subject-chip-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  body .subject-chip { width: 100%; min-width: 0; gap: 8px; }
+  body .subject-tray { padding: 16px; overflow: hidden; }
+  body .subject-tray p { margin-bottom: 12px; }
+}
+@media (max-width: 650px) {
+  :root { --card-padding: 18px; --layout-gap: 12px; --section-gap: 28px; }
+  body .page-wrap { padding: 28px 20px 48px; }
+  body .page-wrap > .page-intro { margin-bottom: 24px; }
+  body .hero-copy { margin-top: 12px; }
+  body .subject-grid { grid-template-columns: minmax(0, 1fr); }
+  body .overview-clean .subject-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body .section-heading h2 { font-size: 18px; }
+  body .subject-actions > button { flex: 1 1 140px; }
+  body .modal-header { padding: 16px 20px; }
+  body .modal-body { padding: 20px; }
+  body .timetable-date { flex: 1 1 100%; justify-content: space-between; }
+  body .timetable-date strong { font-size: 15px; }
+  body .timetable-add { width: 100%; justify-content: center; }
+  body .time-row { grid-template-columns: 46px minmax(0, 1fr); }
+  body .time-label { padding: 16px 6px; font-size: 9px; }
+  body .time-slot { padding: 8px; gap: 8px; }
+  body .session-card { gap: 10px; padding: 12px; }
+  body .session-card .session-complete { flex-basis: 44px; width: 44px; height: 44px; }
+  body .session-card strong { font-size: 12px; }
+  body .subject-chip small { display: none; }
+}
+
+/* Help is grouped by task so the larger guide stays easy to scan. */
+body .help-quick-links { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 20px; margin-top: 22px; }
+body .help-section { margin-top: 32px; scroll-margin-top: 24px; }
+body .help-section .help-grid { margin-bottom: 0; gap: 16px; }
+body .help-card h3 { margin: 0 0 12px; font-size: 15px; line-height: 1.5; color: var(--ink); }
+body .help-card p { margin: 0; line-height: 1.8; }
+@media(max-width:650px) { body .help-quick-links { gap: 12px 16px; } body .help-quick-links .secondary-button { flex-basis: 100%; justify-content: center; } body .help-section { margin-top: 28px; } body .help-section .help-grid { gap: 12px; } }

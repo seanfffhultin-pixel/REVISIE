@@ -35,7 +35,7 @@ function harness(initial = {}, remoteCards = [], options = {}) {
   };
   const context = vm.createContext({ localStorage, crypto: webcrypto, console: { warn() {} }, setTimeout: () => 1, clearTimeout() {}, window: { addEventListener() {} }, document: { addEventListener() {} }, getSupabaseClient: async () => client, getDeck: () => [], getUnits: () => [{ name: 'Cells' }] });
   vm.runInContext(`
-    const syncedStorageKeys = ['revisie-flashcards','revisie-topics','revisie-note-library','revisie-streak','revisie-flashcard-study','revisie-last-activity','revisie-folders'];
+    const syncedStorageKeys = ['revisie-flashcards','revisie-topics','revisie-note-library','revisie-streak','revisie-flashcard-study','revisie-last-activity','revisie-folders','revisie-quiz-questions','revisie-quiz-attempts','revisie-maths-topic-skills'];
     const notePhotoCache = new Map(); function storedNoteMetadata(note) { return note; }
     const workspaceTimestampKey = 'timestamp'; const workspaceOwnerKey = 'owner'; let workspaceSyncTimer;
     const nativeLocalStorageSetItem = localStorage.setItem.bind(localStorage);
@@ -201,4 +201,27 @@ test('workspace sync preserves concurrent folder additions and links across devi
   assert.equal(saved.length, 2);
   assert.equal(saved[0].name, 'Summer mocks'); assert.equal(saved[0].color, 'purple');
   assert.equal(saved[0].items.length, 3);
+});
+
+test('quiz questions and completed results merge across devices without losing additions', async () => {
+  for (const key of ['revisie-quiz-questions', 'revisie-quiz-attempts']) {
+    const item = id => key === 'revisie-quiz-questions'
+      ? { id, subject: 'biology', unit: 'Cells', mode: 'choice', prompt: id, options: ['A', 'B', 'C', 'D'], correct: 0, answer: 'Explanation' }
+      : { id, subject: 'biology', topic: 'Cells', mode: 'choice', score: 1, total: 1, completedAt: '2026-10-15T12:00:00Z' };
+    const h = harness({ [key]: serialize([item('original')]) });
+    h.remote.data[key] = serialize([item('original'), item('laptop')]);
+    h.context.saveWorkspaceItem(key, serialize([item('original'), item('phone')]));
+    assert.equal(await h.context.syncWorkspaceNow(), true);
+    assert.deepEqual(JSON.parse(h.remote.data[key]).map(item => item.id).sort(), ['laptop', 'original', 'phone']);
+  }
+});
+
+test('maths skills linked to different topics merge across devices', async () => {
+  const key = 'revisie-maths-topic-skills';
+  const record = (unit, skills) => ({ id: JSON.stringify(['mathematics', unit]), subject: 'mathematics', unit, skills });
+  const h = harness({ [key]: '[]' });
+  h.remote.data[key] = serialize([record('Algebra', ['linear'])]);
+  h.context.saveWorkspaceItem(key, serialize([record('Statistics', ['mean', 'range'])]));
+  assert.equal(await h.context.syncWorkspaceNow(), true);
+  assert.deepEqual(JSON.parse(h.remote.data[key]).map(item => item.unit).sort(), ['Algebra', 'Statistics']);
 });

@@ -184,7 +184,7 @@
   function refresh() {
     const app = document.getElementById('foldersApp');
     const folders = folderRecords();
-    document.querySelectorAll('[data-page="folders.html"] .nav-count').forEach(badge => { badge.textContent = folders.length; });
+    updateNavigationCounts();
     if (!app) return;
     const id = new URLSearchParams(location.search).get('id');
     const folder = id && folders.find(folder => folder.id === id);
