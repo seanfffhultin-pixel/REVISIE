@@ -2,4 +2,52 @@
 .quiz-generation h3{font-size:16px;margin:25px 0 12px}.quiz-generation textarea{display:block;width:100%;min-height:100px;resize:vertical;padding:12px;background:var(--white);color:var(--ink);border:1px solid var(--line);border-radius:7px;font:inherit;line-height:1.6;margin:10px 0 16px}.quiz-generation details{margin:16px 0}.quiz-generation summary{cursor:pointer}.quiz-generation-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}.quiz-generation-fields label{min-width:0}.quiz-generation-fields input,.quiz-generation-fields select{margin:8px 0 0}.quiz-import-question{margin:18px 0;padding:16px;border:1px solid var(--line);border-radius:8px;overflow-wrap:anywhere}.quiz-import-question h4{font-size:14px;line-height:1.7}.quiz-import-question label{display:flex;align-items:center;gap:10px;line-height:1.6}.quiz-import-question input{accent-color:var(--teal)}.quiz-import-question ol{padding-left:24px;line-height:1.8}.quiz-model-answer{white-space:pre-wrap;line-height:1.8;color:var(--muted)}.quiz-generation button:disabled{opacity:.5;cursor:default}@media(max-width:420px){.quiz-generation-fields{grid-template-columns:1fr}}
 .maths-skill-options{border:1px solid var(--line)!important;border-radius:8px;padding:14px!important;margin:18px 0!important}.maths-skill-options legend{font-weight:700;padding:0 8px}.maths-skill-options label{display:flex;align-items:center;gap:10px;line-height:1.7}.maths-skill-options input{accent-color:var(--teal)}#mathsSubjectTopics>h3{margin:24px 0 18px}
 .practice-options label:has(input:disabled){cursor:default}.practice-options label{flex-wrap:wrap}.practice-options label>span{flex:1;min-width:0}.practice-option-status{flex-basis:100%;padding-left:26px;font-size:11px;line-height:1.6}.practice-options label.is-correct,.practice-feedback.is-correct{background:#e8f5ec;border-color:#278448;color:#175f32}.practice-options label.is-incorrect,.practice-feedback.is-incorrect{background:#fcebea;border-color:#c4443d;color:#94302c}html[data-theme="dark"] .practice-options label.is-correct,html[data-theme="dark"] .practice-feedback.is-correct{background:#183c28;border-color:#67bc84;color:#b5efc6}html[data-theme="dark"] .practice-options label.is-incorrect,html[data-theme="dark"] .practice-feedback.is-incorrect{background:#472724;border-color:#e68c85;color:#ffc7c0}
-.practice-group{margin:32px 0}.practice-toolbar{align-items:flex-end;gap:16px;margin:0 0 18px}.practice-toolbar label{min-width:min(240px,100%)}.practice-toolbar+.practice-description{max-width:76ch;margin:0 0 28px;line-height:1.75}.practice-grid{gap:16px}.practice-card{padding:20px;border-radius:14px;gap:12px;border-color:var(--line)}.practice-card:has(>.subject-icon){display:grid;grid-template-columns:36px minmax(0,1fr);grid-template-rows:auto 1fr auto;align-content:start;column-gap:14px;row-gap:8px}.practice-card>.subject-icon{grid-column:1;grid-row:1/span 2}.practice-card:has(>.subject-icon)>h3{grid-column:2;font-size:14px;line-height:1.5;align-self:center}.practice-card:has(>.subject-icon)>p{grid-column:2;font-size:12px;line-height:1.65}.practice-card>.practice-actions,.practice-card>.primary-button,.practice-card>.text-button{grid-column:1/-1;margin-top:10px}.practice-card>.practice-actions{width:100%;justify-content:space-between;gap:10px}.practice-card>.text-button{font-size:12px;line-height:1.6}.practice-card:has(>.subject-icon)>h3,.practice-card:has(>.subject-icon)>p{margin:0}.practice-topic-links{gap:0;margin-top:20px}.practice-topic-links>div{padding:16px 0;gap:12px}.practice-topic-links strong{font-size:12px;line-height:1.65}.practice-topic-links a{padding:4px 0}.practice-history{padding:20px;border:1px solid var(--line);border-radius:14px;background:var(--white)}.practice-history .section-heading{margin-bottom:8px}.practice-history>p{padding:12px 0;margin:0}.practice-history>p:last-child{border-bottom:0}.practice-options label{padding:15px;border-radius:10px}.practice-review details{padding:16px 0}.quiz-generation h3{margin:24px 0 12px}@media(max-width:650px){.practice-group{margin:28px 0}.practice-grid{gap:12px}.practice-card{padding:18px}.practice-toolbar{gap:14px}.practice-toolbar>.practice-actions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.practice-toolbar>.practice-actions>button{padding:12px 10px;justify-content:center;min-width:0;font-size:11px}.practice-topic-links strong{flex-basis:100%}.practice-history{padding:18px}.practice-options label{padding:14px}}
+/* Card content can vary; every action stays anchored to the same footer. */
+.practice-group { margin: 32px 0; }
+.practice-grid { gap: 16px; align-items: stretch; }
+.practice-card { padding: 20px; border-radius: 14px; gap: 12px; }
+.practice-card-heading { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; }
+.practice-card-heading > .subject-icon { flex: 0 0 36px; width: 36px; height: 36px; margin: 0; }
+.practice-card h3 { font-size: 14px; line-height: 1.5; }
+.practice-card p { line-height: 1.65; }
+body .practice-card > :is(.practice-actions, .primary-button, .text-button) { margin: auto 0 0; width: 100%; }
+body .practice-card > .practice-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding-top: 4px; }
+body .practice-card > .primary-button { margin-top: auto; }
+body .practice-actions > :is(.primary-button, .secondary-button, .text-button) { margin: 0; min-height: 44px; }
+body .practice-card .practice-actions > button { width: 100%; min-width: 0; white-space: normal; }
+body .practice-card .practice-actions > .text-button { padding: 8px 0 8px 4px; }
+.practice-card > .text-button { display: inline-flex; align-items: center; min-height: 44px; font-size: 12px; line-height: 1.6; }
+.practice-toolbar { align-items: flex-end; gap: 16px; margin: 0 0 20px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.practice-toolbar label { min-width: min(240px, 100%); font-size: 12px; }
+body .practice-toolbar select { min-height: 44px; width: 100%; margin: 0; }
+.practice-toolbar > p { margin: 0; padding-bottom: 10px; font-size: 12px; }
+.practice-toolbar + .practice-description { max-width: 76ch; margin: 0 0 28px; line-height: 1.75; }
+.practice-topic-links { gap: 0; margin-top: 20px; }
+.practice-topic-links > div { padding: 16px 0; gap: 12px; }
+.practice-topic-links strong { font-size: 12px; line-height: 1.65; }
+.practice-topic-links a { padding: 4px 0; }
+.practice-history { padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
+.practice-history .section-heading { margin-bottom: 8px; }
+.practice-history > p { padding: 12px 0; margin: 0; }
+.practice-history > p:last-child { border-bottom: 0; }
+.practice-options label { padding: 15px; border-radius: 10px; cursor: pointer; }
+.practice-options input { width: 16px; height: 16px; margin: 0; }
+.practice-session-actions { padding-top: 4px; }
+body .practice-session-actions > .primary-button { width: auto; flex: 1; }
+body .practice-session-actions > .text-button { padding: 10px 16px; }
+body #practiceFeedback > .primary-button { width: 100%; margin: 0; }
+.practice-feedback p { margin: 10px 0 0; }
+.practice-review details { padding: 16px 0; }
+.quiz-generation h3 { margin: 24px 0 12px; }
+@media (max-width: 650px) {
+  .practice-group { margin: 28px 0; }
+  .practice-grid { gap: 12px; }
+  .practice-card { padding: 18px; }
+  .practice-toolbar { gap: 14px; }
+  .practice-toolbar > .practice-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  body .practice-toolbar > .practice-actions > button { padding: 10px; min-width: 0; white-space: normal; }
+  .practice-toolbar > p { padding: 0; }
+  .practice-topic-links strong { flex-basis: 100%; }
+  .practice-history { padding: 18px; }
+  .practice-options label { padding: 14px; }
+}

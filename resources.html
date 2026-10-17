@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Resources — REVISIÉ</title>
   <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="brand.css">
-<link rel="stylesheet" href="modern.css"><link rel="stylesheet" href="modern-extra.css?v=release-quizzes-1"><link rel="stylesheet" href="assets/practice.css?v=5"></head>
+<link rel="stylesheet" href="modern.css?v=motion-1"><link rel="stylesheet" href="modern-extra.css?v=motion-1"><link rel="stylesheet" href="assets/practice.css?v=6"><link rel="stylesheet" href="assets/design-system.css?v=1"><link rel="stylesheet" href="assets/motion.css?v=1"></head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" data-ready="true"><a class="brand brand-logo" href="index.html" aria-label="REVISIÉ home"><img src="assets/revisie-logo.png?v=2" alt="REVISIÉ" width="148" height="63"></a><div class="workspace-switcher"><div class="avatar small">SH</div><div><strong>Sean's workspace</strong><small>GCSE Higher Tier</small></div><i data-lucide="chevrons-up-down"></i></div><nav class="main-nav" aria-label="Main navigation"><p class="nav-label">Workspace</p><a class="nav-item" data-page="index.html" href="index.html"><i data-lucide="layout-dashboard"></i>Overview</a><a class="nav-item" data-page="subjects.html" href="subjects.html"><i data-lucide="library"></i>Subjects<span class="nav-count">10</span></a><a class="nav-item" data-page="flashcards.html" href="flashcards.html"><i data-lucide="layers-3"></i>Flashcards<span class="nav-count">18</span></a><a class="nav-item" data-page="multiple-choice.html" href="multiple-choice.html"><i data-lucide="list-checks"></i>Multiple Choice</a><a class="nav-item" data-page="short-answer.html" href="short-answer.html"><i data-lucide="square-pen"></i>Short Answer</a><a class="nav-item" data-page="maths-practice.html" href="maths-practice.html"><i data-lucide="calculator"></i>Maths Practice</a><a class="nav-item" data-page="folders.html" href="folders.html"><i data-lucide="folders"></i>Folders</a><a class="nav-item" data-page="notes.html" href="notes.html"><i data-lucide="notebook-pen"></i>Notes</a><a class="nav-item active" aria-current="page" data-page="resources.html" href="resources.html"><i data-lucide="folder-open"></i>Resources</a><p class="nav-label second">Tools</p><a class="nav-item" data-page="planner.html" href="planner.html"><i data-lucide="calendar-days"></i>Revision planner</a><a class="nav-item" data-page="progress.html" href="progress.html"><i data-lucide="chart-no-axes-combined"></i>Progress</a></nav></aside>
@@ -17,13 +17,13 @@
           <h1>Resources.</h1>
           <p class="hero-copy">Keep revision PDFs in your account so they are ready on every device. PDFs can be up to 25 MB.</p>
         </section>
-        <form id="resourceUploadForm" class="notes-form">
+        <section class="resource-upload-panel"><div class="section-heading"><div><p class="eyebrow">ADD TO YOUR LIBRARY</p><h2>Upload a PDF</h2></div></div><form id="resourceUploadForm" class="notes-form">
           <label class="upload-label" for="resourceFile">Add a PDF</label>
           <input id="resourceFile" type="file" accept="application/pdf,.pdf" required>
           <label class="upload-label" for="resourceSubject">Subject</label>
           <select id="resourceSubject" class="note-subject" required></select>
           <button class="primary-button" type="submit">Save PDF</button>
-        </form>
+        </form></section>
         <section class="notes-section">
           <div class="section-heading"><div><p class="eyebrow">SAVED FILES</p><h2>Your PDFs</h2></div></div>
           <div class="resource-list"></div>
@@ -33,6 +33,6 @@
   </div>
   <div class="toast" id="toast" role="status"></div>
   <script defer src="assets/lucide.min.js"></script>
-  <script defer src="site.js?v=release-quizzes-1"></script><script defer src="assets/maths-questions.js?v=2"></script><script defer src="assets/quiz-import.js?v=1"></script><script defer src="assets/practice-engine.js?v=2"></script><script defer src="assets/practice.js?v=6"></script><script defer src="assets/folders.js?v=4"></script>
+  <script defer src="site.js?v=design-system-1"></script><script defer src="assets/maths-questions.js?v=2"></script><script defer src="assets/quiz-import.js?v=1"></script><script defer src="assets/practice-engine.js?v=2"></script><script defer src="assets/practice.js?v=7"></script><script defer src="assets/folders.js?v=5"></script>
 </body>
 </html>

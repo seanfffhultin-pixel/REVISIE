@@ -1,0 +1,92 @@
+/* Motion is opt-in through the existing system/account preference. */
+:root {
+  --motion-ease: cubic-bezier(.2, .75, .25, 1);
+  --motion-spring: cubic-bezier(.2, .8, .25, 1.2);
+}
+@keyframes revisie-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes revisie-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes revisie-dialog {
+  from { opacity: 0; transform: translateY(16px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes revisie-menu {
+  from { opacity: 0; transform: translateY(-6px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes revisie-answer {
+  from { opacity: .25; transform: perspective(700px) rotateX(-14deg) translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes revisie-question {
+  from { opacity: .25; transform: perspective(700px) rotateX(14deg) translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes revisie-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes revisie-check {
+  0% { opacity: 0; transform: scale(.6); }
+  65% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Entrance effects finish quickly and leave no transforms on the page. */
+html:not(.reduce-motion) body .page-wrap > :not([hidden]) {
+  animation: revisie-enter 420ms var(--motion-ease) backwards;
+}
+html:not(.reduce-motion) body .page-wrap > :nth-child(2) { animation-delay: 45ms; }
+html:not(.reduce-motion) body .page-wrap > :nth-child(3) { animation-delay: 90ms; }
+html:not(.reduce-motion) body .page-wrap > :nth-child(n+4) { animation-delay: 135ms; }
+html:not(.reduce-motion) body :is(.subject-grid, .practice-grid, .folder-grid, .notes-library, .stat-grid) > * {
+  animation: revisie-enter 380ms var(--motion-ease) backwards;
+  animation-delay: 70ms;
+}
+html:not(.reduce-motion) body :is(.subject-grid, .practice-grid, .folder-grid, .notes-library, .stat-grid) > :nth-child(3n+2) { animation-delay: 115ms; }
+html:not(.reduce-motion) body :is(.subject-grid, .practice-grid, .folder-grid, .notes-library, .stat-grid) > :nth-child(3n+3) { animation-delay: 160ms; }
+
+/* Cards and controls respond without changing layout or theme colors. */
+html:not(.reduce-motion) body :is(.subject-card, .practice-card, .help-card, .saved-note, .folder-card-link, .stat-card, .subject-note) {
+  transition: transform 220ms var(--motion-ease), box-shadow 220ms ease, border-color 180ms ease, background 180ms ease;
+}
+html:not(.reduce-motion) body :is(.primary-button, .secondary-button, .danger-button, .ocr-button, .icon-button, .modal-close, .subject-chip, .timetable-add, .review-actions button) {
+  transition: transform 160ms var(--motion-ease), box-shadow 180ms ease, background 180ms ease, border-color 180ms ease;
+}
+html:not(.reduce-motion) body :is(.primary-button, .secondary-button, .danger-button, .ocr-button, .icon-button, .modal-close, .subject-chip, .timetable-add, .review-actions button):active:not(:disabled) { transform: scale(.97); }
+html:not(.reduce-motion) body :is(.subject-card, .practice-card, .subject-note):active { transform: translateY(-1px) scale(.99); }
+html:not(.reduce-motion) body .nav-item { transition: transform 180ms var(--motion-ease), background 180ms ease, color 180ms ease; }
+html:not(.reduce-motion) body :is(.subject-icon, .primary-button svg, .secondary-button svg, .icon-button svg) { transition: transform 220ms var(--motion-ease); }
+html:not(.reduce-motion) body :is(input, textarea, select) { transition: border-color 180ms ease, box-shadow 180ms ease; }
+@media (hover: hover) and (pointer: fine) {
+  html:not(.reduce-motion) body :is(.subject-card, .practice-card, .help-card, .saved-note, .folder-card-link, .subject-note):hover { transform: translateY(-4px); }
+  html:not(.reduce-motion) body .stat-card:hover { transform: translateY(-2px); }
+  html:not(.reduce-motion) body :is(.primary-button, .secondary-button, .timetable-add):hover:not(:disabled) { transform: translateY(-2px); }
+  html:not(.reduce-motion) body :is(.primary-button, .secondary-button, .timetable-add):active:not(:disabled) { transform: translateY(0) scale(.97); }
+  html:not(.reduce-motion) body .nav-item:hover { transform: translateX(3px); }
+  html:not(.reduce-motion) body :is(.subject-card, .practice-card):hover .subject-icon { transform: rotate(-5deg) scale(1.04); }
+  html:not(.reduce-motion) body :is(.primary-button, .secondary-button):hover svg[data-lucide="arrow-right"] { transform: translateX(3px); }
+  html:not(.reduce-motion) body .icon-button:hover svg { transform: scale(1.1); }
+}
+
+/* Dynamic surfaces animate when they appear, including keyboard-triggered UI. */
+html:not(.reduce-motion) body .modal-backdrop { animation: revisie-fade 180ms ease backwards; }
+html:not(.reduce-motion) body .modal { animation: revisie-dialog 260ms var(--motion-ease) backwards; }
+html:not(.reduce-motion) body .mobile-nav-backdrop { animation: revisie-fade 200ms ease backwards; }
+html:not(.reduce-motion) body .item-actions[open] .item-actions-list { transform-origin: top right; animation: revisie-menu 180ms var(--motion-ease) backwards; }
+html:not(.reduce-motion) body [data-auth-panel]:not([hidden]) { animation: revisie-enter 240ms var(--motion-ease) backwards; }
+html:not(.reduce-motion) body details[open] > :not(summary) { animation: revisie-enter 200ms var(--motion-ease) backwards; }
+html:not(.reduce-motion) body :is(.practice-feedback, .quiz-import-question, #practiceSession > h3, .practice-review, .search-result) { animation: revisie-enter 240ms var(--motion-ease) backwards; }
+html:not(.reduce-motion) body .practice-options label { animation: revisie-enter 240ms var(--motion-ease) backwards; }
+html:not(.reduce-motion) body .practice-options label:nth-of-type(2) { animation-delay: 30ms; }
+html:not(.reduce-motion) body .practice-options label:nth-of-type(3) { animation-delay: 60ms; }
+html:not(.reduce-motion) body .practice-options label:nth-of-type(4) { animation-delay: 90ms; }
+html:not(.reduce-motion) body .flashcard > div { animation: revisie-question 280ms var(--motion-ease) backwards; }
+html:not(.reduce-motion) body .flashcard.answer > div { animation-name: revisie-answer; }
+html:not(.reduce-motion) body .session-complete[aria-pressed="true"] svg { animation: revisie-check 260ms var(--motion-spring) backwards; }
+html:not(.reduce-motion) body .bar span { transform-origin: left; animation: revisie-progress 600ms var(--motion-ease) backwards; transition: width 400ms var(--motion-ease); }

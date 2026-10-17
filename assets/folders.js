@@ -193,7 +193,7 @@
     if (id && !folder) {
       app.innerHTML = `<div class="folder-empty"><h2>Folder not found</h2><p>It may have been deleted on another device. Your original material is still in your workspace.</p><a class="secondary-button" href="folders.html">All folders ${icon('arrow-left')}</a></div>`;
     } else if (!folder) {
-      app.innerHTML = `<div class="folders-toolbar"><button class="primary-button" id="newFolder">New folder ${icon('plus')}</button><p>${folders.length} ${folders.length === 1 ? 'folder' : 'folders'}</p></div>${folders.length ? `<div class="folder-grid">${folders.map(folder => {
+      app.innerHTML = `<div class="library-toolbar folders-toolbar"><h2>Your folders</h2><div class="subject-actions"><button class="primary-button" id="newFolder">New folder ${icon('plus')}</button></div></div>${folders.length ? `<div class="folder-grid">${folders.map(folder => {
         const available = folder.items.map(resolve).filter(Boolean);
         const summary = [['deck', 'deck', 'decks'], ['note', 'note', 'notes'], ['resource', 'PDF', 'PDFs']].map(([type, singular, plural]) => {
           const count = available.filter(item => item.ref.type === type).length;

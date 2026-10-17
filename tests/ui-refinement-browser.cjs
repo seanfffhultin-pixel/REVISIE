@@ -30,7 +30,8 @@ const root = path.resolve(__dirname, '..');
     await page.emulateMedia({ colorScheme: 'light' });
     await page.goto('https://revisie.test/multiple-choice.html');
     assert.equal(await page.locator('.page-intro').evaluate(el => getComputedStyle(el).marginBottom), '28px');
-    assert.ok(await page.locator('.practice-card').first().evaluate(el => el.getBoundingClientRect().height < 180));
+    // The shared card padding and larger controls still leave a compact library.
+    assert.ok(await page.locator('.practice-card').first().evaluate(el => el.getBoundingClientRect().height < 220));
     await page.goto('https://revisie.test/planner.html');
     await page.evaluate(() => {
       saveWorkspaceItem('revisie-planner-items', JSON.stringify([

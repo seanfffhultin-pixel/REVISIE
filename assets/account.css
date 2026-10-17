@@ -1,0 +1,49 @@
+/* Standalone account flow with the workspace's shared surfaces and controls. */
+body .account-standalone { display: flex; flex-direction: column; align-items: stretch; min-height: 100dvh; padding: 0; }
+body .account-header { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px clamp(20px, 4vw, 56px); }
+body .account-logo { display: inline-flex; flex-shrink: 0; }
+body .account-logo img { display: block; width: 148px; height: 63px; object-fit: contain; }
+body .account-header > .text-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+body .account-container { width: min(500px, calc(100% - 40px)); margin: auto; padding: 24px 0 48px; }
+body .account-access > .eyebrow { margin: 0 0 20px; }
+body .account-explore { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; margin: 20px 0 0; color: var(--muted); font-size: 12px; }
+body .account-explore > a { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; }
+body .account-access {
+  width: 100%;
+  min-width: 0;
+  padding: 28px;
+  border-radius: var(--ui-card-radius);
+}
+body .account-access .auth-tabs { margin: 0 0 28px; }
+body .account-access [data-auth-panel] > h1 {
+  margin: 0 0 12px;
+  font-size: 34px;
+  line-height: 1.3;
+  letter-spacing: -.03em;
+}
+body .account-access .hero-copy { margin: 0 0 24px; font-size: 13px; line-height: 1.8; }
+body .account-access .settings-form { gap: 18px; border: 0; border-radius: 0; }
+body .account-access .settings-form label { display: grid; gap: 8px; }
+body .account-access .settings-form .primary-button { margin-top: 6px; }
+body .account-access .auth-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 24px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.8;
+}
+body .account-access .auth-note > svg { flex: 0 0 16px; width: 16px; height: 16px; margin-top: 4px; }
+body .account-access:has([data-auth-panel="forgot"]:not([hidden])) .auth-note,
+body .account-access:has([data-auth-panel="recovery"]:not([hidden])) .auth-note { display: none; }
+@media (max-width: 650px) {
+  body .account-header { padding: 16px 20px; }
+  body .account-logo img { width: 126px; height: 54px; }
+  body .account-container { padding: 12px 0 32px; }
+  body .account-access { padding: 24px 20px; }
+  body .account-access [data-auth-panel] > h1 { font-size: 30px; }
+  body .account-access .auth-tabs { margin-bottom: 24px; }
+}
+html:not(.reduce-motion) body .account-container { animation: revisie-enter 420ms var(--motion-ease) backwards; }

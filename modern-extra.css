@@ -389,9 +389,9 @@ body .session-card { border-radius: 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body .primary-button, body .subject-card, body .secondary-button,
-  body .workspace-switcher, body .nav-item { transition: none; }
-  body .primary-button:hover { transform: none; }
+  html.reduce-motion body .primary-button, html.reduce-motion body .subject-card, html.reduce-motion body .secondary-button,
+  html.reduce-motion body .workspace-switcher, html.reduce-motion body .nav-item { transition: none; }
+  html.reduce-motion body .primary-button:hover { transform: none; }
 }
 
 /* Keep navigation anchored to the viewport, independent of page length. */
@@ -959,6 +959,33 @@ body .folder-review-source { margin: 16px 0 -10px; }
   body .folder-choice-list { max-height: 38dvh; }
 }
 
+/* Shared controls keep the same geometry with or without an icon. */
+body :is(.primary-button, .secondary-button, .danger-button, .ocr-button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 11px 16px;
+  line-height: 1.5;
+  text-align: center;
+  white-space: normal;
+}
+body :is(.primary-button, .secondary-button, .danger-button, .ocr-button) > svg {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+}
+body :is(input, select, textarea) { font-family: inherit; }
+body .hero-copy { text-wrap: pretty; }
+body :is(.page-intro, .hero-row) h1 { text-wrap: balance; }
+body .section-heading > :first-child { min-width: 0; }
+body .modal-header h2 { line-height: 1.5; overflow-wrap: anywhere; }
+body .modal-body { overscroll-behavior: contain; }
+body .subject-card strong, body .help-card h2 { overflow-wrap: anywhere; }
+body .top-actions { flex-shrink: 0; }
+
 /* Consistent layout rhythm across libraries, subjects and the planner. */
 :root { --layout-gap: 16px; --section-gap: 32px; --card-padding: 20px; }
 body .page-wrap { padding: 40px clamp(24px, 3.2vw, 48px) 64px; }
@@ -1069,3 +1096,66 @@ body .help-section .help-grid { margin-bottom: 0; gap: 16px; }
 body .help-card h3 { margin: 0 0 12px; font-size: 15px; line-height: 1.5; color: var(--ink); }
 body .help-card p { margin: 0; line-height: 1.8; }
 @media(max-width:650px) { body .help-quick-links { gap: 12px 16px; } body .help-quick-links .secondary-button { flex-basis: 100%; justify-content: center; } body .help-section { margin-top: 28px; } body .help-section .help-grid { gap: 12px; } }
+
+/* Refined proportions and hierarchy preserve the existing theme palette. */
+body { font-family: Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body h1 { font-size: clamp(34px, 3.8vw, 48px); letter-spacing: -.045em; line-height: 1.12; }
+body h2 { letter-spacing: -.025em; }
+body .hero-copy { max-width: 62ch; font-size: 14px; line-height: 1.8; }
+body .page-intro .eyebrow { margin-bottom: 16px; }
+body .page-intro .library-total { display: block; width: fit-content; margin-top: 20px; font-variant-numeric: tabular-nums; }
+body .library-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 20px 0;
+  margin: 0 0 24px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+body .library-toolbar h2 { margin: 0; font-size: 18px; }
+body .library-toolbar .subject-actions { margin: 0; gap: 10px; }
+body .library-toolbar .subject-actions > button { width: auto; margin: 0; }
+body .subject-filter { gap: 8px; }
+body .page-wrap .subject-filter button { border-radius: 999px; padding: 9px 16px; }
+body .subject-grid { gap: 18px; }
+body .subject-card, body .overview-clean .subject-card { border-radius: 18px; padding: 24px; text-align: left; }
+body .subject-card strong { font-size: 15px; letter-spacing: -.02em; }
+body .subject-card small { margin-top: 6px; }
+body .subject-top { margin-bottom: 20px; }
+body .subject-icon { border-radius: 12px; }
+body .nav-item { min-height: 44px; border-radius: 12px; gap: 12px; }
+body .nav-count { line-height: 1.4; }
+body .workspace-switcher { gap: 10px; border-radius: 14px; }
+body .topbar { height: 76px; }
+body .icon-button { width: 36px; height: 36px; border-radius: 12px; }
+body :is(.settings-form, .help-card, .saved-note, .subject-note, .resource-row, .flashcard) { border-radius: 16px; }
+body .help-card { padding: 24px; }
+body .modal { border-radius: 22px; }
+body .modal-header { padding: 20px 24px; }
+body .modal-header h2 { font-size: 17px; letter-spacing: -.02em; }
+body .notes-form { gap: 14px; }
+body :is(.note-title, .note-subject, .note-preview) { border-radius: 10px; }
+body .review-actions { gap: 12px; }
+body :is(.primary-button, .secondary-button, .danger-button, .ocr-button) { border-radius: 12px; }
+@media (max-width: 900px) {
+  body .library-toolbar { align-items: flex-start; }
+  body .library-toolbar .subject-actions { flex: 1 1 100%; }
+}
+@media (max-width: 650px) {
+  body h1 { font-size: 34px; }
+  body .topbar { height: 64px; }
+  body .icon-button { width: 34px; height: 34px; border-radius: 10px; }
+  body .library-toolbar { gap: 16px; padding: 18px 0; }
+  body .library-toolbar .subject-actions { display: grid; grid-template-columns: 1fr; width: 100%; }
+  body .library-toolbar .subject-actions > button { width: 100%; }
+  body .subject-grid { gap: 14px; }
+  body .subject-card, body .overview-clean .subject-card { padding: 20px; }
+  body .overview-clean .subject-card strong { font-size: 14px; }
+  body .subject-top { margin-bottom: 16px; }
+  body .help-card { padding: 20px; }
+  body .modal { border-radius: 18px; }
+  body .modal-header { padding: 18px 20px; }
+}
