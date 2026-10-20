@@ -37,19 +37,11 @@
   100% { opacity: 1; transform: scale(1); }
 }
 
-/* Entrance effects finish quickly and leave no transforms on the page. */
-html:not(.reduce-motion) body .page-wrap > :not([hidden]) {
+/* Animate the persistent page once. Cards are wrapped/rebuilt during setup and
+   workspace sync, so entrance effects on their nodes would replay and overlap. */
+html:not(.reduce-motion) body .page-wrap {
   animation: revisie-enter 420ms var(--motion-ease) backwards;
 }
-html:not(.reduce-motion) body .page-wrap > :nth-child(2) { animation-delay: 45ms; }
-html:not(.reduce-motion) body .page-wrap > :nth-child(3) { animation-delay: 90ms; }
-html:not(.reduce-motion) body .page-wrap > :nth-child(n+4) { animation-delay: 135ms; }
-html:not(.reduce-motion) body :is(.subject-grid, .practice-grid, .folder-grid, .notes-library, .stat-grid) > * {
-  animation: revisie-enter 380ms var(--motion-ease) backwards;
-  animation-delay: 70ms;
-}
-html:not(.reduce-motion) body :is(.subject-grid, .practice-grid, .folder-grid, .notes-library, .stat-grid) > :nth-child(3n+2) { animation-delay: 115ms; }
-html:not(.reduce-motion) body :is(.subject-grid, .practice-grid, .folder-grid, .notes-library, .stat-grid) > :nth-child(3n+3) { animation-delay: 160ms; }
 
 /* Cards and controls respond without changing layout or theme colors. */
 html:not(.reduce-motion) body :is(.subject-card, .practice-card, .help-card, .saved-note, .folder-card-link, .stat-card, .subject-note) {
@@ -86,7 +78,6 @@ html:not(.reduce-motion) body .practice-options label { animation: revisie-enter
 html:not(.reduce-motion) body .practice-options label:nth-of-type(2) { animation-delay: 30ms; }
 html:not(.reduce-motion) body .practice-options label:nth-of-type(3) { animation-delay: 60ms; }
 html:not(.reduce-motion) body .practice-options label:nth-of-type(4) { animation-delay: 90ms; }
-html:not(.reduce-motion) body .flashcard > div { animation: revisie-question 280ms var(--motion-ease) backwards; }
-html:not(.reduce-motion) body .flashcard.answer > div { animation-name: revisie-answer; }
+html:not(.reduce-motion) body .flashcard.answer > div { animation: revisie-answer 280ms var(--motion-ease) backwards; }
 html:not(.reduce-motion) body .session-complete[aria-pressed="true"] svg { animation: revisie-check 260ms var(--motion-spring) backwards; }
-html:not(.reduce-motion) body .bar span { transform-origin: left; animation: revisie-progress 600ms var(--motion-ease) backwards; transition: width 400ms var(--motion-ease); }
+html:not(.reduce-motion) body .bar span { transition: width 400ms var(--motion-ease); }
